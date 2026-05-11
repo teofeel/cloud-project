@@ -1,4 +1,7 @@
-variable "admin_usernames"{
+variable "admin_users" {
     type = list(string)
-    default = ["Isidora", "Ivana"]
+}
+
+variable "admin_group" {
+    type = string
 }

@@ -16,7 +16,7 @@ resource "aws_iam_policy" "admin_policy" {
 
 
 resource "aws_iam_user" "admins" {
-    for_each = toset(var.admin_usernames)
+    for_each = toset(var.admin_users)
     name = each.value
     tags = {
         Description = "Coworkers on this project"
@@ -25,7 +25,7 @@ resource "aws_iam_user" "admins" {
 
 
 resource "aws_iam_group" "admin_group" {
-    name = "admin"
+    name = var.admin_group
 }
 
 
