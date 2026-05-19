@@ -24,7 +24,40 @@ module "aws_vpc" {
   source                    = "../../modules/vpc"
   main_vpc_cidr_block       = var.main_vpc_cidr_block
   main_vpc_instance_tenancy = var.main_vpc_instance_tenancy
-  main_subnet_cidr_block    = var.main_subnet_cidr_block
-  main_subnet_map_on_launch = var.main_subnet_map_on_launch
+  public_subnet_cidr_block  = var.public_subnet_cidr_block
+  subnet_map_on_launch      = var.public_subnet_map_on_launch
   route_table_cidr_block    = var.route_table_cidr_block
+  private_subnet_cidr_block = var.private_subnet_cidr_block
+}
+
+# create fck-nat-ami security group
+module "nat_sg" {
+  source  = "../../modules/security_groups"
+  sg_name = "fck-nat-sg"
+  vpc_id  = module.aws_vpc.vpc_id
+
+  ingress_rules = [{
+    from_port   = var.nat_sg_ingress_from_port
+    to_port     = var.nat_sg_ingress_to_port
+    protocol    = var.nat_sg_ingress_protocol
+    cidr_blocks = [var.private_subnet_cidr_block]
+  }]
+}
+
+# create fck-nat-ami
+module "fck_nat" {
+  source  = "RaJiska/fck-nat/aws"
+  version = "~> 1.4.0"
+
+  name      = var.nat_ec2_instance_name
+  vpc_id    = module.aws_vpc.vpc_id
+  subnet_id = module.aws_vpc.public_subnet_id
+
+  update_route_tables = true
+  route_tables_ids = {
+    "private-routing" = module.aws_vpc.private_route_table_id
+  }
+
+  instance_type                 = "t3.micro"
+  additional_security_group_ids = [module.nat_sg.sg_id]
 }

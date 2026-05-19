@@ -8,12 +8,17 @@ variable "main_vpc_instance_tenancy" {
   default = "default"
 }
 
-variable "main_subnet_cidr_block" {
+variable "public_subnet_cidr_block" {
   type    = string
   default = "10.0.1.0/24"
 }
 
-variable "main_subnet_map_on_launch" {
+variable "private_subnet_cidr_block" {
+  type    = string
+  default = "10.0.2.0/24"
+}
+
+variable "public_subnet_map_on_launch" {
   type    = bool
   default = true
 }
@@ -21,4 +26,21 @@ variable "main_subnet_map_on_launch" {
 variable "route_table_cidr_block" {
   type    = string
   default = "0.0.0.0/0"
+}
+
+variable "nat_sg_ingress_from_port" {
+  type = number
+}
+
+variable "nat_sg_ingress_to_port" {
+  type = number
+}
+
+variable "nat_sg_ingress_protocol" {
+  type = string
+}
+
+
+variable "nat_ec2_instance_name" {
+  type = string
 }

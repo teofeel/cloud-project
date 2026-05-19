@@ -1,5 +1,10 @@
-main_vpc_cidr_block       = "10.0.0.0/16"
-main_vpc_instance_tenancy = "default"
-main_subnet_cidr_block    = "10.0.1.0/24"
-main_subnet_map_on_launch = true
-route_table_cidr_block    = "0.0.0.0/0"
+main_vpc_cidr_block         = "10.0.0.0/16"
+main_vpc_instance_tenancy   = "default"
+public_subnet_cidr_block    = "10.0.1.0/24"
+private_subnet_cidr_block   = "10.0.2.0/24"
+public_subnet_map_on_launch = true
+route_table_cidr_block      = "0.0.0.0/0"
+nat_sg_ingress_from_port    = 0
+nat_sg_ingress_to_port      = 0
+nat_sg_ingress_protocol     = "-1"
+nat_ec2_instance_name       = "fck-nat"
