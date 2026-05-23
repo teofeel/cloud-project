@@ -78,3 +78,7 @@ variable "internet_cidr_block" {
   default = "0.0.0.0/0"
 }
 
+variable "s3_bronze_bucket_name" {
+  type        = string
+}
+
