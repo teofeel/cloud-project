@@ -33,7 +33,7 @@ module "aws_vpc" {
 # create fck-nat-ami security group
 module "nat_sg" {
   source  = "../../modules/security_groups"
-  sg_name = "fck-nat-sg"
+  sg_name = var.nat_sg_name
   vpc_id  = module.aws_vpc.vpc_id
 
   ingress_rules = [{
@@ -58,6 +58,22 @@ module "fck_nat" {
     "private-routing" = module.aws_vpc.private_route_table_id
   }
 
-  instance_type                 = "t3.micro"
+  instance_type                 = var.nat_ec2_instance_type
   additional_security_group_ids = [module.nat_sg.sg_id]
+}
+
+# create sg for collectors lambda that will send req to tw and hn
+module "collectors_sg" {
+  source  = "../../modules/security_groups"
+  sg_name = var.collectors_sg_name
+  vpc_id  = module.aws_vpc.vpc_id
+
+  ingress_rules = []
+
+  egress_rules = [{
+    from_port   = var.collectors_sg_egress_from_port
+    to_port     = var.collectors_sg_egress_to_port
+    protocol    = var.collectors_sg_egress_protocol
+    cidr_blocks = [var.internet_cidr_block]
+  }]
 }

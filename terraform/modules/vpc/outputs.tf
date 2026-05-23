@@ -8,9 +8,9 @@ output "public_subnet_id" {
   value       = aws_subnet.public_subnet.id
 }
 
-output "private_subnet_id"{
+output "private_subnet_id" {
   description = "ID of private subnet"
-  value = aws_subnet.private_subnet.id
+  value       = aws_subnet.private_subnet.id
 }
 output "vpc_arn" {
   description = "ARN of VPC"
@@ -22,9 +22,19 @@ output "public_subnet_arn" {
   value       = aws_subnet.public_subnet.arn
 }
 
-output "private_subnet_arn"{
+output "public_subnet_cidr" {
+  description = "CIDR block of public subnet"
+  value       = aws_subnet.public_subnet.cidr_block
+}
+
+output "private_subnet_arn" {
   description = "ARN of private subnet"
   value       = aws_subnet.private_subnet.arn
+}
+
+output "private_subnet_cidr" {
+  description = "CIDR block of public subnet"
+  value       = aws_subnet.private_subnet.cidr_block
 }
 
 output "igw_id" {
