@@ -8,12 +8,17 @@ variable "main_vpc_instance_tenancy" {
   default = "default"
 }
 
-variable "main_subnet_cidr_block" {
+variable "public_subnet_cidr_block" {
   type    = string
   default = "10.0.1.0/24"
 }
 
-variable "main_subnet_map_on_launch" {
+variable "private_subnet_cidr_block" {
+  type = string
+  default = "10.0.2.0/24"
+}
+
+variable "subnet_map_on_launch" {
   type    = bool
   default = true
 }
