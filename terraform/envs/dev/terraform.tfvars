@@ -14,3 +14,4 @@ collectors_sg_name             = "collectors-sg"
 collectors_sg_egress_from_port = 443
 collectors_sg_egress_to_port   = 443
 collectors_sg_egress_protocol  = "tcp"
+s3_bronze_bucket_name = "s3-bronze-layer-cloud-2026"

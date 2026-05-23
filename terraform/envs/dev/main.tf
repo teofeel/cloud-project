@@ -77,3 +77,10 @@ module "collectors_sg" {
     cidr_blocks = [var.internet_cidr_block]
   }]
 }
+
+#s3 module
+module "s3_bronze_layer" {
+  source      = "../../modules/s3"
+  bucket_name = var.s3_bronze_bucket_name
+  environment = "dev"
+}
