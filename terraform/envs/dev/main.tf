@@ -84,3 +84,23 @@ module "s3_bronze_layer" {
   bucket_name = var.s3_bronze_bucket_name
   environment = "dev"
 }
+
+resource "aws_iam_policy" "lambda_s3_write_policy" {
+  name        = "LambdaS3BronzeWritePolicy"
+  path        = "/"
+  description = "Allowing lambda to write in s3"
+
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject",]
+        Resource = "${module.s3_bronze_layer.bucket_arn}/*" 
+      },
+    ]
+  })
+}
+
+#TODO: attach policy on lambda

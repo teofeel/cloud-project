@@ -43,17 +43,17 @@ resource "aws_route_table_association" "private_table_association" {
 }
 
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id = module.aws_vpc.main_vpc.id
+  vpc_id = aws_vpc.main_vpc.id
   service_name = "com.amazonaws.eu-west-1.s3"
 
   vpc_endpoint_type = "Gateway"
 
   tags = {
-    name: "s3-gateway-endpoint"
+    Name = "s3-gateway-endpoint"
   }
 }
 
 resource "aws_vpc_endpoint_route_table_association" "private_s3" {
   vpc_endpoint_id = aws_vpc_endpoint.s3.id
-  route_table_id = module.aws_vpc.private_route_table_id
+  route_table_id = aws_route_table.private_route_table.id
 }
