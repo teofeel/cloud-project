@@ -103,4 +103,32 @@ resource "aws_iam_policy" "lambda_s3_write_policy" {
   })
 }
 
-#TODO: attach policy on lambda
+module "hacker_news_lambda" {
+  source = "../../modules/lambda"
+
+  function_name = var.hacker_news_lambda_name
+  s3_bucket_name = var.s3_bronze_bucket_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.hn_source_file_path
+  output_zip_path = var.hn_output_zip_path
+  handler = var.hn_handler
+}
+
+# module "twitter_lambda" {
+#   source = "../../modules/lambda"
+
+#   function_name = var.twt_lambda_name
+#   s3_bucket_name = var.s3_bronze_bucket_name
+#   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+#   private_subnet_ids = [module.aws_vpc.private_subnet_id]
+#   security_group_ids = [module.collectors_sg.sg_id]
+
+#   source_file_path = var.twt_source_file_path
+#   output_zip_path = var.twt_output_zip_path
+#   handler = var.twt_handler
+# }

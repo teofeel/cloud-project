@@ -13,3 +13,11 @@ output "admin_users_arn" {
 output "admin_user_map" {
     value = {for name, user in aws_iam_user.admins : name => user.arn}
 }
+
+output "lambda_role_arn" {
+  value = aws_iam_role.lambda_execution_role.arn
+}
+
+output "lambda_role_name" {
+  value = aws_iam_role.lambda_execution_role.name
+}
