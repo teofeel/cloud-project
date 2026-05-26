@@ -26,6 +26,8 @@ resource "aws_lambda_function" "this" {
 }
 
 resource "aws_iam_role_policy_attachment" "attach_s3_policy_to_lambda_role" {
-  role = data.terraform_remote_state.iam.outputs.lambda_role_name
-  policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  #role = data.terraform_remote_state.iam.outputs.lambda_role_name
+  #policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  role = var.iam_lambda_role_name
+  policy_arn = var.lambda_s3_write_policy_arn
 }

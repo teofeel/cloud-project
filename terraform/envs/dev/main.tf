@@ -116,6 +116,9 @@ module "hacker_news_lambda" {
   source_file_path = var.hn_source_file_path
   output_zip_path = var.hn_output_zip_path
   handler = var.hn_handler
+
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
 }
 
 module "hacker_news_daily_schedule" {
