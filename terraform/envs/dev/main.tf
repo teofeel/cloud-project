@@ -118,6 +118,14 @@ module "hacker_news_lambda" {
   handler = var.hn_handler
 }
 
+module "hacker_news_daily_schedule" {
+  source               = "../../modules/eventbridge"
+  rule_name            = "hacker-news-collector-daily-rule"
+  schedule_expression  = "cron(0 1 * * ? *)"
+  lambda_arn           = module.hacker_news_lambda.lambda_arn
+  lambda_function_name = module.hacker_news_lambda.lambda_function_name
+}
+
 # module "twitter_lambda" {
 #   source = "../../modules/lambda"
 
