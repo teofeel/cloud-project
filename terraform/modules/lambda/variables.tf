@@ -37,3 +37,11 @@ variable "private_subnet_ids" {
   type = list(string)
   description = "List of the private subnets inside the VPC"
 }
+
+variable lambda_s3_write_policy_arn{
+  type = string
+}
+
+variable iam_lambda_role_name {
+  type = string
+}
