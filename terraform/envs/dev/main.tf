@@ -53,14 +53,20 @@ module "fck_nat" {
   vpc_id    = module.aws_vpc.vpc_id
   subnet_id = module.aws_vpc.public_subnet_id
 
-  update_route_tables = true
-  route_tables_ids = {
-    "private-routing" = module.aws_vpc.private_route_table_id
-  }
+  update_route_tables = false
 
   instance_type                 = var.nat_ec2_instance_type
   additional_security_group_ids = [module.nat_sg.sg_id]
 }
+
+resource "aws_route" "private_internet_access" {
+  route_table_id         = module.aws_vpc.private_route_table_id
+  destination_cidr_block = "0.0.0.0/0"
+  network_interface_id   = module.fck_nat.eni_id
+
+  depends_on = [module.fck_nat] 
+}
+
 
 # create sg for collectors lambda that will send req to tw and hn
 module "collectors_sg" {
@@ -69,13 +75,6 @@ module "collectors_sg" {
   vpc_id  = module.aws_vpc.vpc_id
 
   ingress_rules = []
-
-  egress_rules = [{
-    from_port   = var.collectors_sg_egress_from_port
-    to_port     = var.collectors_sg_egress_to_port
-    protocol    = var.collectors_sg_egress_protocol
-    cidr_blocks = [var.internet_cidr_block]
-  }]
 }
 
 #s3 module
