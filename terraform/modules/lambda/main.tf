@@ -11,7 +11,12 @@ resource "aws_lambda_function" "this" {
     role = var.lambda_role_arn
     filename = data.archive_file.lambda_zip.output_path
     source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-    timeout = 300
+    timeout = 900
+    memory_size = 4096
+
+    ephemeral_storage {
+      size = 10240
+    }
 
     vpc_config {
       subnet_ids = var.private_subnet_ids
@@ -21,6 +26,13 @@ resource "aws_lambda_function" "this" {
     environment {
       variables = {
         S3_BUCKET_NAME = var.s3_bucket_name
+      }
+    }
+
+    dynamic "environment" {
+      for_each = length(keys(var.environment_variables)) > 0 ? [true] : []
+      content {
+        variables = var.environment_variables
       }
     }
 }
