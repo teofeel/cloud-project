@@ -106,7 +106,11 @@ module "hacker_news_lambda" {
   source = "../../modules/lambda"
 
   function_name = var.hacker_news_lambda_name
-  s3_bucket_name = var.s3_bronze_bucket_name
+  #s3_bucket_name = var.s3_bronze_bucket_name
+  env_variables = {
+    S3_BUCKET_NAME = var.s3_bronze_bucket_name
+  }
+  
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
@@ -142,3 +146,90 @@ module "hacker_news_daily_schedule" {
 #   output_zip_path = var.twt_output_zip_path
 #   handler = var.twt_handler
 # }
+
+
+
+
+
+
+
+
+
+
+
+# Notification SG and Lambda impl
+module "notifier_sg" {
+  source  = "../../modules/security_groups"
+  sg_name = "notifier-sg"
+  vpc_id  = module.aws_vpc.vpc_id
+
+  ingress_rules = []
+
+  egress_rules = [{
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }]
+}
+
+module "discord_notification_lambda" {
+  source = "../../modules/lambda"
+
+  function_name = var.discord_notification_lambda_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.discord_notifier_role_arn
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.discord_notifier_role_name
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.notifier_sg.sg_id]
+
+  source_file_path = var.discord_notification_file_path
+  output_zip_path  = var.discord_notification_zip_path
+  handler          = var.discord_notification_lambda_handler
+
+  lambda_s3_write_policy_arn = null
+
+  env_variables = {
+    DISCORD_WEBHOOK_URL = var.discord_webhook_url
+  }
+}
+
+resource "aws_iam_policy" "lambda_invoke_discord_policy" {
+  name = "LambdaInvokeDiscordNotifierPolicy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "lambda:InvokeFunction"
+        Resource = module.discord_notification_lambda.lambda_arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_invoke_discord_policy" {
+  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  policy_arn = aws_iam_policy.lambda_invoke_discord_policy.arn
+}
+
+
+resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
+  function_name = module.hacker_news_lambda.lambda_function_name
+
+  maximum_retry_attempts = 0
+  destination_config {
+    on_failure {
+      destination = module.discord_notification_lambda.lambda_arn
+    }
+  }
+}
+
+resource "aws_lambda_permission" "allow_lambda_destination" {
+  statement_id  = "AllowLambdaDestinationInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.discord_notification_lambda.lambda_function_name
+  principal     = "lambda.amazonaws.com"
+  source_arn    = module.hacker_news_lambda.lambda_arn
+}

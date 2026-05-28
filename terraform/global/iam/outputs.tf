@@ -21,3 +21,11 @@ output "lambda_role_arn" {
 output "lambda_role_name" {
   value = aws_iam_role.lambda_execution_role.name
 }
+
+output "discord_notifier_role_arn" {
+  value = aws_iam_role.discord_notifier_role.arn
+}
+
+output "discord_notifier_role_name" {
+  value = aws_iam_role.discord_notifier_role.name
+}

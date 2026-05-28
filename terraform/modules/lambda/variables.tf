@@ -25,6 +25,7 @@ variable "lambda_role_arn" {
 
 variable "s3_bucket_name" {
   type = string
+  default = null
   description = "S3 bucket name that the lambda writes data to"
 }
 
@@ -38,10 +39,16 @@ variable "private_subnet_ids" {
   description = "List of the private subnets inside the VPC"
 }
 
-variable lambda_s3_write_policy_arn{
+variable "lambda_s3_write_policy_arn" {
+  type = string
+  default = null
+}
+
+variable "iam_lambda_role_name" {
   type = string
 }
 
-variable iam_lambda_role_name {
-  type = string
+variable "env_variables" {
+  type = map(string)
+  default = null
 }
