@@ -45,3 +45,8 @@ variable lambda_s3_write_policy_arn{
 variable iam_lambda_role_name {
   type = string
 }
+
+variable "environment_variables" {
+  type        = map(string)
+  default     = {}
+}

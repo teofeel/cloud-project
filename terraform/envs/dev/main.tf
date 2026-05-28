@@ -128,17 +128,32 @@ module "hacker_news_daily_schedule" {
   lambda_function_name = module.hacker_news_lambda.lambda_function_name
 }
 
-# module "twitter_lambda" {
-#   source = "../../modules/lambda"
+module "twitter_lambda" {
+  source = "../../modules/lambda"
 
-#   function_name = var.twt_lambda_name
-#   s3_bucket_name = var.s3_bronze_bucket_name
-#   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+  function_name = var.twt_lambda_name
+  s3_bucket_name = var.s3_bronze_bucket_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
-#   private_subnet_ids = [module.aws_vpc.private_subnet_id]
-#   security_group_ids = [module.collectors_sg.sg_id]
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
 
-#   source_file_path = var.twt_source_file_path
-#   output_zip_path = var.twt_output_zip_path
-#   handler = var.twt_handler
-# }
+  source_file_path = var.twt_source_file_path
+  output_zip_path = var.twt_output_zip_path
+  handler = var.twt_handler
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+
+  environment_variables = {
+    KAGGLE_USERNAME = var.kaggle_username
+    KAGGLE_KEY      = var.kaggle_key
+  }
+}
+
+module "twitter_daily_schedule" {
+  source               = "../../modules/eventbridge"
+  rule_name            = "twitter-collector-daily-rule"
+  schedule_expression  = "cron(0 0 2 * ? *)" 
+  lambda_arn           = module.twitter_lambda.lambda_arn
+  lambda_function_name = module.twitter_lambda.lambda_function_name
+}

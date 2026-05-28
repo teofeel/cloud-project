@@ -113,3 +113,13 @@ variable "twt_source_file_path" {
 variable "twt_output_zip_path" {
   type = string
 }
+
+variable "kaggle_username" {
+  type        = string
+  sensitive   = true
+}
+
+variable "kaggle_key" {
+  type        = string
+  sensitive   = true
+}
