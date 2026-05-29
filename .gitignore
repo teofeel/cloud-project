@@ -43,7 +43,11 @@ terraform.rc
 # planout
 
 *.pyc
+
 terraform/envs/dev/hacker_news_lambda.zip
-code/discord_notifier_lambda.py
 terraform/envs/dev/discord_notifier_lambda.zip
+secrets.tfvars
 terraform/envs/dev/secrets.tfvars
+terraform/envs/dev/secrets.tfvars
+terraform/envs/dev/hacker_news_lambda.zip
+terraform/envs/dev/twitter_lambda.zip

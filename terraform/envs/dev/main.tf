@@ -107,10 +107,6 @@ module "hacker_news_lambda" {
 
   function_name = var.hacker_news_lambda_name
   #s3_bucket_name = var.s3_bronze_bucket_name
-  env_variables = {
-    S3_BUCKET_NAME = var.s3_bronze_bucket_name
-  }
-  
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
@@ -122,6 +118,10 @@ module "hacker_news_lambda" {
 
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  
+  environment_variables = {
+    S3_BUCKET_NAME = var.s3_bronze_bucket_name
+  }
 }
 
 module "hacker_news_daily_schedule" {
@@ -131,29 +131,59 @@ module "hacker_news_daily_schedule" {
   lambda_arn           = module.hacker_news_lambda.lambda_arn
   lambda_function_name = module.hacker_news_lambda.lambda_function_name
 }
+locals {
+  twt_build_dir = "${path.module}/../../../code/twitter_build"
+}
 
-# module "twitter_lambda" {
-#   source = "../../modules/lambda"
+resource "null_resource" "twitter_lambda_build" {
+  triggers = {
+    source_hash = filemd5(var.twt_source_file_path)
+  }
 
-#   function_name = var.twt_lambda_name
-#   s3_bucket_name = var.s3_bronze_bucket_name
-#   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
-
-#   private_subnet_ids = [module.aws_vpc.private_subnet_id]
-#   security_group_ids = [module.collectors_sg.sg_id]
-
-#   source_file_path = var.twt_source_file_path
-#   output_zip_path = var.twt_output_zip_path
-#   handler = var.twt_handler
-# }
-
-
-
+ provisioner "local-exec" {
+    command = <<EOT
+      pip install kaggle -t ../../../code/twitter_build/ --quiet
+      copy ..\..\..\code\twitter_lambda.py ..\..\..\code\twitter_build\
+    EOT
+  }
+}
 
 
+module "twitter_lambda" {
+  source = "../../modules/lambda"
 
+  function_name = var.twt_lambda_name
+  #s3_bucket_name = var.s3_bronze_bucket_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
 
+  #source_file_path = var.twt_source_file_path
+  #output_zip_path = var.twt_output_zip_path
+  source_file_path = var.twt_source_file_path  # still needed if build_dir == ""
+  build_dir        = local.twt_build_dir        # this takes precedence
+  output_zip_path  = var.twt_output_zip_path
+
+  handler = var.twt_handler
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+
+  environment_variables = {
+    S3_BUCKET_NAME = var.s3_bronze_bucket_name
+    KAGGLE_USERNAME = var.kaggle_username
+    KAGGLE_KEY      = var.kaggle_key
+    KAGGLE_CONFIG_DIR   = "/tmp"
+  }
+}
+
+module "twitter_daily_schedule" {
+  source               = "../../modules/eventbridge"
+  rule_name            = "twitter-collector-daily-rule"
+  schedule_expression  = "cron(0 0 2 * ? *)" 
+  lambda_arn           = module.twitter_lambda.lambda_arn
+  lambda_function_name = module.twitter_lambda.lambda_function_name
+}
 
 
 
@@ -189,7 +219,7 @@ module "discord_notification_lambda" {
 
   lambda_s3_write_policy_arn = null
 
-  env_variables = {
+  environment_variables = {
     DISCORD_WEBHOOK_URL = var.discord_webhook_url
   }
 }

@@ -137,3 +137,12 @@ variable "discord_webhook_url" {
 variable "discord_failure_notification_rule_name" {
   type = string
 }
+variable "kaggle_username" {
+  type        = string
+  sensitive   = true
+}
+
+variable "kaggle_key" {
+  type        = string
+  sensitive   = true
+}
