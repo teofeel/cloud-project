@@ -1,9 +1,14 @@
 import os
+
+os.environ["KAGGLE_CONFIG_DIR"] = "/tmp"
+
 import boto3
 from kaggle.api.kaggle_api_extended import KaggleApi
 from boto3.s3.transfer import TransferConfig
 import sys
 import threading
+
+download_path = "./tmp/"
 
 class ProgressPercentage(object):
     def __init__(self, filename):

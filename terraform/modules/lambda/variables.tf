@@ -23,10 +23,10 @@ variable "lambda_role_arn" {
   description = "ARN role that gives the lambda permissions"
 }
 
-variable "s3_bucket_name" {
-  type = string
-  description = "S3 bucket name that the lambda writes data to"
-}
+#variable "s3_bucket_name" {
+#  type = string
+#  description = "S3 bucket name that the lambda writes data to"
+#}
 
 variable "security_group_ids" {
   type = list(string)
@@ -49,4 +49,10 @@ variable iam_lambda_role_name {
 variable "environment_variables" {
   type        = map(string)
   default     = {}
+}
+
+variable "build_dir" {
+  type    = string
+  default = ""
+  description = "If set, zip this directory instead of source_file_path"
 }
