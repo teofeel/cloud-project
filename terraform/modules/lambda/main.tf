@@ -1,6 +1,10 @@
 data "archive_file" "lambda_zip" {
   type = "zip"
-  source_file = var.source_file_path
+  #source_file = var.source_file_path
+  #output_path = var.output_zip_path
+
+  source_dir  = var.build_dir != "" ? var.build_dir : null
+  source_file = var.build_dir == "" ? var.source_file_path : null
   output_path = var.output_zip_path
 }
 
@@ -12,7 +16,7 @@ resource "aws_lambda_function" "this" {
     filename = data.archive_file.lambda_zip.output_path
     source_code_hash = data.archive_file.lambda_zip.output_base64sha256
     timeout = 900
-    memory_size = 4096
+    memory_size = 3008
 
     ephemeral_storage {
       size = 10240
@@ -23,14 +27,14 @@ resource "aws_lambda_function" "this" {
       security_group_ids = var.security_group_ids
     }
 
-    environment {
-      variables = {
-        S3_BUCKET_NAME = var.s3_bucket_name
-      }
-    }
+    #environment {
+    #  variables = {
+    #    S3_BUCKET_NAME = var.s3_bucket_name
+    #  }
+    #}
 
     dynamic "environment" {
-      for_each = length(keys(var.environment_variables)) > 0 ? [true] : []
+      for_each = length(var.environment_variables) > 0 ? [var.environment_variables] : []
       content {
         variables = var.environment_variables
       }

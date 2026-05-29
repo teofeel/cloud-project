@@ -43,4 +43,8 @@ terraform.rc
 # planout
 
 *.pyc
-secret.tfvars
+secrets.tfvars
+terraform/envs/dev/secrets.tfvars
+terraform/envs/dev/secrets.tfvars
+terraform/envs/dev/hacker_news_lambda.zip
+terraform/envs/dev/twitter_lambda.zip
