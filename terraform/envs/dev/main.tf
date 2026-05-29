@@ -161,8 +161,8 @@ module "twitter_lambda" {
 
   #source_file_path = var.twt_source_file_path
   #output_zip_path = var.twt_output_zip_path
-  source_file_path = var.twt_source_file_path  # still needed if build_dir == ""
-  build_dir        = local.twt_build_dir        # this takes precedence
+  source_file_path = var.twt_source_file_path  
+  build_dir        = local.twt_build_dir        
   output_zip_path  = var.twt_output_zip_path
 
   handler = var.twt_handler
@@ -268,9 +268,13 @@ resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
 }
 
 resource "aws_lambda_permission" "allow_lambda_destination" {
-  statement_id  = "AllowLambdaDestinationInvoke"
+  for_each = toset([
+    module.hacker_news_lambda.lambda_arn,
+    module.twitter_lambda.lambda_arn
+  ])
+  statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
   action        = "lambda:InvokeFunction"
   function_name = module.discord_notification_lambda.lambda_function_name
   principal     = "lambda.amazonaws.com"
-  source_arn    = module.hacker_news_lambda.lambda_arn
+  source_arn    = each.value
 }
