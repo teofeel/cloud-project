@@ -53,3 +53,5 @@ terraform/envs/dev/hacker_news_lambda.zip
 terraform/envs/dev/twitter_lambda.zip
 terraform/envs/dev/secrets.tfvars
 terraform/envs/dev/secrets.tfvars
+terraform/envs/dev/discord_notifier_lambda.zip
+
