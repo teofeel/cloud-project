@@ -35,7 +35,7 @@ def lambda_handler(event, context):
     api.authenticate()
     
     dataset = "kaushiksuresh147/bitcoin-tweets"
-    download_path = "./tmp/"
+    download_path = "/tmp/"
     
     print("Download...")
     api.dataset_download_files(dataset, path=download_path, unzip=True)
