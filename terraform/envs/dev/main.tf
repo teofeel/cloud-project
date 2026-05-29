@@ -256,6 +256,17 @@ resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
   }
 }
 
+resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
+  function_name = module.twitter_lambda.lambda_function_name
+
+  maximum_retry_attempts = 0
+  destination_config {
+    on_failure {
+      destination = module.discord_notification_lambda.lambda_arn
+    }
+  }
+}
+
 resource "aws_lambda_permission" "allow_lambda_destination" {
   statement_id  = "AllowLambdaDestinationInvoke"
   action        = "lambda:InvokeFunction"
