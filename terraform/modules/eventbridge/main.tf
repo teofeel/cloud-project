@@ -1,6 +1,8 @@
 resource "aws_cloudwatch_event_rule" "this" {
   name = var.rule_name
   schedule_expression = var.schedule_expression
+  event_pattern = var.event_pattern
+
 }
 
 resource "aws_cloudwatch_event_target" "this" {

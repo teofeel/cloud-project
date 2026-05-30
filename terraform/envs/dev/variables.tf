@@ -79,7 +79,7 @@ variable "internet_cidr_block" {
 }
 
 variable "s3_bronze_bucket_name" {
-  type        = string
+  type = string
 }
 
 variable "hacker_news_lambda_name" {
@@ -111,6 +111,31 @@ variable "twt_source_file_path" {
 }
 
 variable "twt_output_zip_path" {
+  type = string
+}
+
+
+variable "discord_notification_lambda_name" {
+  type = string
+}
+
+variable "discord_notification_lambda_handler" {
+  type = string
+}
+
+variable "discord_notification_file_path" {
+  type = string
+}
+
+variable "discord_notification_zip_path" {
+  type = string
+}
+
+variable "discord_webhook_url" {
+  type = string
+}
+
+variable "discord_failure_notification_rule_name" {
   type = string
 }
 
