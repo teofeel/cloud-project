@@ -131,6 +131,7 @@ module "hacker_news_daily_schedule" {
   lambda_arn           = module.hacker_news_lambda.lambda_arn
   lambda_function_name = module.hacker_news_lambda.lambda_function_name
 }
+
 locals {
   twt_build_dir = "${path.module}/../../../code/twitter_build"
 }
@@ -140,7 +141,8 @@ resource "null_resource" "twitter_lambda_build" {
     source_hash = filemd5(var.twt_source_file_path)
   }
 
- provisioner "local-exec" {
+provisioner "local-exec" {
+
     command = <<EOT
       pip install kaggle -t ../../../code/twitter_build/ --quiet
       copy ..\..\..\code\twitter_lambda.py ..\..\..\code\twitter_build\
@@ -278,3 +280,6 @@ resource "aws_lambda_permission" "allow_lambda_destination" {
   principal     = "lambda.amazonaws.com"
   source_arn    = each.value
 }
+
+
+

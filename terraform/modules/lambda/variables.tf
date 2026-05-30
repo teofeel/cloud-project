@@ -23,7 +23,6 @@ variable "lambda_role_arn" {
   description = "ARN role that gives the lambda permissions"
 }
 
-
 #variable "s3_bucket_name" {
 #  type = string
 #  description = "S3 bucket name that the lambda writes data to"
@@ -38,6 +37,7 @@ variable "private_subnet_ids" {
   type = list(string)
   description = "List of the private subnets inside the VPC"
 }
+
 
 variable "lambda_s3_write_policy_arn" {
   type = string

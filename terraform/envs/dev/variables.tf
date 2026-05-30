@@ -114,6 +114,7 @@ variable "twt_output_zip_path" {
   type = string
 }
 
+
 variable "discord_notification_lambda_name" {
   type = string
 }
@@ -137,6 +138,7 @@ variable "discord_webhook_url" {
 variable "discord_failure_notification_rule_name" {
   type = string
 }
+
 variable "kaggle_username" {
   type        = string
   sensitive   = true
