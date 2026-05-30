@@ -82,3 +82,44 @@ variable "s3_bronze_bucket_name" {
   type        = string
 }
 
+variable "hacker_news_lambda_name" {
+  type = string
+}
+
+variable "hn_source_file_path" {
+  type = string
+}
+
+variable "hn_output_zip_path" {
+  type = string
+}
+
+variable "hn_handler" {
+  type = string
+}
+
+variable "twt_handler" {
+  type = string
+}
+
+variable "twt_lambda_name" {
+  type = string
+}
+
+variable "twt_source_file_path" {
+  type = string
+}
+
+variable "twt_output_zip_path" {
+  type = string
+}
+
+variable "kaggle_username" {
+  type        = string
+  sensitive   = true
+}
+
+variable "kaggle_key" {
+  type        = string
+  sensitive   = true
+}

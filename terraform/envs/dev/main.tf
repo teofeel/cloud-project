@@ -53,14 +53,20 @@ module "fck_nat" {
   vpc_id    = module.aws_vpc.vpc_id
   subnet_id = module.aws_vpc.public_subnet_id
 
-  update_route_tables = true
-  route_tables_ids = {
-    "private-routing" = module.aws_vpc.private_route_table_id
-  }
+  update_route_tables = false
 
   instance_type                 = var.nat_ec2_instance_type
   additional_security_group_ids = [module.nat_sg.sg_id]
 }
+
+resource "aws_route" "private_internet_access" {
+  route_table_id         = module.aws_vpc.private_route_table_id
+  destination_cidr_block = "0.0.0.0/0"
+  network_interface_id   = module.fck_nat.eni_id
+
+  depends_on = [module.fck_nat] 
+}
+
 
 # create sg for collectors lambda that will send req to tw and hn
 module "collectors_sg" {
@@ -69,13 +75,6 @@ module "collectors_sg" {
   vpc_id  = module.aws_vpc.vpc_id
 
   ingress_rules = []
-
-  egress_rules = [{
-    from_port   = var.collectors_sg_egress_from_port
-    to_port     = var.collectors_sg_egress_to_port
-    protocol    = var.collectors_sg_egress_protocol
-    cidr_blocks = [var.internet_cidr_block]
-  }]
 }
 
 #s3 module
@@ -103,4 +102,87 @@ resource "aws_iam_policy" "lambda_s3_write_policy" {
   })
 }
 
-#TODO: attach policy on lambda
+module "hacker_news_lambda" {
+  source = "../../modules/lambda"
+
+  function_name = var.hacker_news_lambda_name
+  #s3_bucket_name = var.s3_bronze_bucket_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.hn_source_file_path
+  output_zip_path = var.hn_output_zip_path
+  handler = var.hn_handler
+
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  
+  environment_variables = {
+    S3_BUCKET_NAME = var.s3_bronze_bucket_name
+  }
+}
+
+module "hacker_news_daily_schedule" {
+  source               = "../../modules/eventbridge"
+  rule_name            = "hacker-news-collector-daily-rule"
+  schedule_expression  = "cron(0 1 * * ? *)"
+  lambda_arn           = module.hacker_news_lambda.lambda_arn
+  lambda_function_name = module.hacker_news_lambda.lambda_function_name
+}
+
+
+locals {
+  twt_build_dir = "${path.module}/../../../code/twitter_build"
+}
+
+resource "null_resource" "twitter_lambda_build" {
+  triggers = {
+    source_hash = filemd5(var.twt_source_file_path)
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      pip install kaggle -t ../../../code/twitter_build/ --quiet
+      copy ..\..\..\code\twitter_lambda.py ..\..\..\code\twitter_build\
+    EOT
+  }
+}
+
+
+module "twitter_lambda" {
+  source = "../../modules/lambda"
+
+  function_name = var.twt_lambda_name
+  #s3_bucket_name = var.s3_bronze_bucket_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  #source_file_path = var.twt_source_file_path
+  #output_zip_path = var.twt_output_zip_path
+  source_file_path = var.twt_source_file_path  # still needed if build_dir == ""
+  build_dir        = local.twt_build_dir        # this takes precedence
+  output_zip_path  = var.twt_output_zip_path
+
+  handler = var.twt_handler
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+
+  environment_variables = {
+    S3_BUCKET_NAME = var.s3_bronze_bucket_name
+    KAGGLE_USERNAME = var.kaggle_username
+    KAGGLE_KEY      = var.kaggle_key
+    KAGGLE_CONFIG_DIR   = "/tmp"
+  }
+}
+
+module "twitter_daily_schedule" {
+  source               = "../../modules/eventbridge"
+  rule_name            = "twitter-collector-daily-rule"
+  schedule_expression  = "cron(0 0 2 * ? *)" 
+  lambda_arn           = module.twitter_lambda.lambda_arn
+  lambda_function_name = module.twitter_lambda.lambda_function_name
+}
