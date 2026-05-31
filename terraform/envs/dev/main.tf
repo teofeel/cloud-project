@@ -219,7 +219,7 @@ module "discord_notification_lambda" {
   output_zip_path  = var.discord_notification_zip_path
   handler          = var.discord_notification_lambda_handler
 
-  lambda_s3_write_policy_arn = null
+  attach_s3_policy = false
 
   environment_variables = {
     DISCORD_WEBHOOK_URL = var.discord_webhook_url
@@ -247,39 +247,88 @@ resource "aws_iam_role_policy_attachment" "attach_invoke_discord_policy" {
 }
 
 
-resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
-  function_name = module.hacker_news_lambda.lambda_function_name
-
-  maximum_retry_attempts = 0
-  destination_config {
-    on_failure {
-      destination = module.discord_notification_lambda.lambda_arn
-    }
-  }
+module "sns_jobs_failure" {
+  source = "../../modules/sns"
+  
+  sns_topic_name = "job-failures"
+  sns_protocol = "lambda"
+  sns_endpoint = module.discord_notification_lambda.lambda_arn
 }
 
-resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
-  function_name = module.twitter_lambda.lambda_function_name
 
-  maximum_retry_attempts = 0
-  destination_config {
-    on_failure {
-      destination = module.discord_notification_lambda.lambda_arn
-    }
-  }
-}
+module "failure_cloudwatch" {
+  source = "../../modules/cloudwatch"
 
-resource "aws_lambda_permission" "allow_lambda_destination" {
-  for_each = toset([
+  event_rule_name = "on-failed-jobs"
+  target_id = "sns-jobs-failure"
+  sns_topic_arn = module.sns_jobs_failure.sns_topic_arn
+  event_rule_source = ["aws.lambda"]
+  event_detail_types = ["Lambda Function Invocation Result - Failure"]
+  event_statuses = ["FAILED", "TIMED_OUT", "THROTTLED", "OUT_OF_MEMORY", "ABORTED"]
+  resource_arns = [
     module.hacker_news_lambda.lambda_arn,
     module.twitter_lambda.lambda_arn
-  ])
-  statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
+  ]
+}
+
+resource "aws_sns_topic_policy" "allow_eventbridge" {
+  arn = module.sns_jobs_failure.sns_topic_arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sns:Publish"
+      Resource  = module.sns_jobs_failure.sns_topic_arn
+    }]
+  })
+}
+
+resource "aws_lambda_permission" "allow_sns_invoke_lambda" {
+  statement_id  = "AllowSNSInvokeDiscordNotifier"
   action        = "lambda:InvokeFunction"
   function_name = module.discord_notification_lambda.lambda_function_name
-  principal     = "lambda.amazonaws.com"
-  source_arn    = each.value
+  principal     = "sns.amazonaws.com"
+  source_arn    = module.sns_jobs_failure.sns_topic_arn
 }
+
+
+#resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
+#  function_name = module.hacker_news_lambda.lambda_function_name
+#
+#  maximum_retry_attempts = 0
+#  destination_config {
+#    on_failure {
+#      destination = module.sns_jobs_failure.sns_arn
+#    }
+#  }
+#}
+#
+#resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
+#  function_name = module.twitter_lambda.lambda_function_name
+#
+#  maximum_retry_attempts = 0
+#  destination_config {
+#    on_failure {
+#      destination = module.sns_jobs_failure.sns_arn
+#    }
+#  }
+#}
+
+
+
+#resource "aws_lambda_permission" "allow_lambda_destination" {
+#  for_each = toset([
+#    module.hacker_news_lambda.lambda_arn,
+#    module.twitter_lambda.lambda_arn
+#  ])
+#  statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
+#  action        = "lambda:InvokeFunction"
+#  function_name = module.discord_notification_lambda.lambda_function_name
+#  principal     = "lambda.amazonaws.com"
+#  source_arn    = each.value
+#}
 
 
 

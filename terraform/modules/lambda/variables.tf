@@ -59,3 +59,9 @@ variable "build_dir" {
   default = ""
   description = "If set, zip this directory instead of source_file_path"
 }
+
+variable "attach_s3_policy" {
+  type    = bool
+  default = true
+  description = "Whether to attach the S3 write policy to the Lambda role"
+}

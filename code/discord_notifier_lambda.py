@@ -7,28 +7,30 @@ WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 
 def lambda_handler(event, context):
-    request_context = event.get('requestContext', {})
-    response_payload = event.get('responsePayload', {}) or {}
-
-    function_arn = request_context.get('functionArn', '')
+    sns_record = event['Records'][0]['Sns']
+    inner_event = json.loads(sns_record['Message'])
+    
+    detail = inner_event.get('detail', {})
+    resources = inner_event.get('resources', [''])
+    function_arn = resources[0] if resources else ''
 
     arn_parts = function_arn.split(':') if function_arn else []
     region = arn_parts[3] if len(arn_parts) > 3 else 'eu-west-1'
 
-    if len(arn_parts) > 0:
+    if arn_parts:
         if arn_parts[-1] == '$LATEST':
-            function_name = arn_parts[-2]  
+            function_name = arn_parts[-2]
         else:
-            function_name = arn_parts[-1]  
+            function_name = arn_parts[-1]
     else:
         function_name = 'Unknown-Function'
 
-    status = request_context.get('condition', 'FAILED')
+    status = detail.get('status', 'FAILED')
+    error_message = detail.get('errorMessage', 'No explicit error message')
 
     cloudwatch_log_link = f"https://{region}.console.aws.amazon.com/cloudwatch/home?region={region}#logsV2:log-groups"
     lambda_console_link = f"https://{region}.console.aws.amazon.com/lambda/home?region={region}#/functions/{function_name}"
 
-    error_message = response_payload.get('errorMessage', 'No explicit error message')
 
     message_content = (
         f"AWS Alert: Something Happened\n"
