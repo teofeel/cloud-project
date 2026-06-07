@@ -7,12 +7,14 @@ WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 
 def lambda_handler(event, context):
-    sns_record = event['Records'][0]['Sns']
-    inner_event = json.loads(sns_record['Message'])
-    
-    detail = inner_event.get('detail', {})
-    resources = inner_event.get('resources', [''])
-    function_arn = resources[0] if resources else ''
+    if 'Records' in event and 'Sns' in event['Records'][0]:
+        sns_record = event['Records'][0]['Sns']
+        inner_event = json.loads(sns_record['Message'])
+    else:
+        inner_event = event
+
+    request_context = inner_event.get('requestContext', {})
+    function_arn = request_context.get('functionArn', '')
 
     arn_parts = function_arn.split(':') if function_arn else []
     region = arn_parts[3] if len(arn_parts) > 3 else 'eu-west-1'
@@ -25,8 +27,10 @@ def lambda_handler(event, context):
     else:
         function_name = 'Unknown-Function'
 
-    status = detail.get('status', 'FAILED')
-    error_message = detail.get('errorMessage', 'No explicit error message')
+    status = request_context.get('condition', 'RetriesExhausted')
+    
+    response_payload = inner_event.get('responsePayload', {})
+    error_message = response_payload.get('errorMessage', 'No explicit error message')
 
     cloudwatch_log_link = f"https://{region}.console.aws.amazon.com/cloudwatch/home?region={region}#logsV2:log-groups"
     lambda_console_link = f"https://{region}.console.aws.amazon.com/lambda/home?region={region}#/functions/{function_name}"

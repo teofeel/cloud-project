@@ -247,6 +247,35 @@ resource "aws_iam_role_policy_attachment" "attach_invoke_discord_policy" {
 }
 
 
+module "sqs_jobs_failure" {
+  source = "../../modules/sqs"
+  queue_name = "job-failures-queue"
+}
+
+resource "aws_sqs_queue_policy" "example_queue_policy" {
+  queue_url = module.sqs_jobs_failure.sqs_queue_url
+
+  policy = jsonencode(
+  {
+    "Version": "2012-10-17",
+    "Id": "sqspolicy",
+    "Statement": [
+      {
+        "Sid": "001",
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": "sqs:SendMessage",
+        "Resource": module.sqs_jobs_failure.sqs_queue_arn,
+        "Condition": {
+          "ArnEquals": {
+            "aws:SourceArn": module.sqs_jobs_failure.sqs_queue_arn
+          }
+        }
+      }
+    ]
+  })
+}
+
 module "sns_jobs_failure" {
   source = "../../modules/sns"
   
@@ -255,34 +284,22 @@ module "sns_jobs_failure" {
   sns_endpoint = module.discord_notification_lambda.lambda_arn
 }
 
-
-module "failure_cloudwatch" {
-  source = "../../modules/cloudwatch"
-
-  event_rule_name = "on-failed-jobs"
-  target_id = "sns-jobs-failure"
-  sns_topic_arn = module.sns_jobs_failure.sns_topic_arn
-  event_rule_source = ["aws.lambda"]
-  event_detail_types = ["Lambda Function Invocation Result - Failure"]
-  event_statuses = ["FAILED", "TIMED_OUT", "THROTTLED", "OUT_OF_MEMORY", "ABORTED"]
-  resource_arns = [
-    module.hacker_news_lambda.lambda_arn,
-    module.twitter_lambda.lambda_arn
-  ]
-}
-
-resource "aws_sns_topic_policy" "allow_eventbridge" {
-  arn = module.sns_jobs_failure.sns_topic_arn
+resource "aws_iam_policy" "lambda_sns_publish_policy" {
+  name = "LambdaSNSPublishPolicy"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "events.amazonaws.com" }
-      Action    = "sns:Publish"
-      Resource  = module.sns_jobs_failure.sns_topic_arn
+      Effect   = "Allow"
+      Action   = "sns:Publish"
+      Resource = module.sns_jobs_failure.sns_topic_arn
     }]
   })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_sns_publish_policy" {
+  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
 }
 
 resource "aws_lambda_permission" "allow_sns_invoke_lambda" {
@@ -294,28 +311,27 @@ resource "aws_lambda_permission" "allow_sns_invoke_lambda" {
 }
 
 
-#resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
-#  function_name = module.hacker_news_lambda.lambda_function_name
-#
-#  maximum_retry_attempts = 0
-#  destination_config {
-#    on_failure {
-#      destination = module.sns_jobs_failure.sns_arn
-#    }
-#  }
-#}
-#
-#resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
-#  function_name = module.twitter_lambda.lambda_function_name
-#
-#  maximum_retry_attempts = 0
-#  destination_config {
-#    on_failure {
-#      destination = module.sns_jobs_failure.sns_arn
-#    }
-#  }
-#}
+resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
+  function_name          = module.hacker_news_lambda.lambda_function_name
+  maximum_retry_attempts = 0
 
+  destination_config {
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
+
+resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
+  function_name          = module.twitter_lambda.lambda_function_name
+  maximum_retry_attempts = 0
+
+  destination_config {
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
 
 
 #resource "aws_lambda_permission" "allow_lambda_destination" {
