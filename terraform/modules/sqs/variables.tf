@@ -3,7 +3,7 @@ variable "queue_name" {
 }
 
 variable "fifo_queue" {
-  type= bool
+  type    = bool
   default = false
 }
 

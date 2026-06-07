@@ -10,3 +10,8 @@ variable sns_protocol {
 variable sns_endpoint {
     type = string
 }
+
+variable "raw_message_delivery" {
+  type = bool
+  default = false
+}

@@ -4,5 +4,5 @@ output "sqs_queue_arn" {
 }
 
 output "sqs_queue_url" {
-    value = aws_sqs_queue.queue.url
+  value = aws_sqs_queue.queue.url
 }
