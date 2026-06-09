@@ -1,6 +1,6 @@
-import boto3
-import json
 import os
+import json
+import boto3
 import pandas as pd
 import awswrangler as wr
 import uuid
@@ -16,6 +16,8 @@ def lambda_handler(event, context):
     response = s3.get_object(Bucket=bucket_name, Key=key)
     file_content = response['Body'].read().decode('utf-8')
     data = json.loads(file_content)
+    # with open("hn_raw_1780826334.json", 'r') as file: 
+    #     data = json.load(file)
 
     users_list = []
     posts_list = []
@@ -50,46 +52,29 @@ def lambda_handler(event, context):
             "content_text": clean_text,
             "created_at": iso_time, 
             "post_type": post_type,
-            "year": year,           
-            "month": month, 
-            "day": day
+            "year": year, "month": month, "day": day
         })
 
         users_list.append({
             "user_id": str(uuid.uuid4()),
             "username": author,
             "platform": "Hacker News",
-            "karma_score": pd.NA,
-            "is_verified": pd.NA,
-            "created_at": pd.NA   
+            "karma_score": pd.NA, "is_verified": pd.NA, "created_at": pd.NA   
         })
 
-    df_users = pd.DataFrame(users_list)
-    df_posts = pd.DataFrame(posts_list)
+    df_users = pd.DataFrame(users_list).drop_duplicates(subset=['username'])
+    df_posts = pd.DataFrame(posts_list).drop_duplicates(subset=['post_id'])
 
-    df_users = df_users.drop_duplicates(subset=['username'])
-    df_posts = df_posts.drop_duplicates(subset=['post_id'])
-
-    silver_bucket = os.environ.get("SILVER_BUCKET_NAME", "tvoj-silver-bucket")
+    silver_bucket = os.environ.get("SILVER_BUCKET_NAME", "NAME")
     silver_path = f"s3://{silver_bucket}/silver/"
     
-    wr.s3.to_parquet(
-        df=df_users, 
-        path=f"{silver_path}users/", 
-        dataset=True, 
-        mode="append", 
-        partition_cols=['platform']
-    )
-    
-    wr.s3.to_parquet(
-        df=df_posts, 
-        path=f"{silver_path}posts/", 
-        dataset=True, 
-        mode="append", 
-        partition_cols=['year', 'month', 'day']
-    )
-    
-    return {
-        "statusCode": 200, 
-        "body": f"Successfully processed {len(df_posts)} posts and {len(df_users)} users."
-    }
+    if not df_users.empty:
+        wr.s3.to_parquet(df=df_users, path=f"{silver_path}users/", dataset=True, mode="append", partition_cols=['platform'])
+        
+    if not df_posts.empty:
+        wr.s3.to_parquet(df=df_posts, path=f"{silver_path}posts/", dataset=True, mode="append", partition_cols=['year', 'month', 'day'])
+        
+    return {"statusCode": 200, "body": f"HN: Processed {len(df_posts)} posts."}
+
+# if __name__=="__main__":
+#     lambda_handler(None,None)
