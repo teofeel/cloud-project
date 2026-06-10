@@ -61,7 +61,13 @@ variable "build_dir" {
 }
 
 variable "attach_s3_policy" {
-  type    = bool
-  default = true
-  description = "Whether to attach the S3 write policy to the Lambda role"
+  type        = bool
+  description = "allow access to s3"
+  default     = false
+}
+
+variable "layers" {
+  description = "layers list attached to lambda (if we are using packages like awswrangler)"
+  type        = list(string)
+  default     = []
 }

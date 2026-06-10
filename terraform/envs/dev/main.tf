@@ -84,6 +84,12 @@ module "s3_bronze_layer" {
   environment = "dev"
 }
 
+module "s3_silver_layer"{
+  source = "../../modules/s3"
+  bucket_name = var.s3_silver_bucket_name
+  environment = "dev"
+}
+
 resource "aws_iam_policy" "lambda_s3_write_policy" {
   name        = "LambdaS3BronzeWritePolicy"
   path        = "/"
@@ -95,8 +101,9 @@ resource "aws_iam_policy" "lambda_s3_write_policy" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["s3:PutObject",]
-        Resource = "${module.s3_bronze_layer.bucket_arn}/*" 
+        Action   = ["s3:PutObject","s3:GetObject"]
+        Resource = ["${module.s3_bronze_layer.bucket_arn}/*",
+        "${module.s3_silver_layer.bucket_arn}/*"] 
       },
     ]
   })
@@ -117,6 +124,7 @@ module "hacker_news_lambda" {
   handler = var.hn_handler
 
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  attach_s3_policy = true
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
   
   environment_variables = {
@@ -130,24 +138,6 @@ module "hacker_news_daily_schedule" {
   schedule_expression  = "cron(0 1 * * ? *)"
   lambda_arn           = module.hacker_news_lambda.lambda_arn
   lambda_function_name = module.hacker_news_lambda.lambda_function_name
-}
-
-locals {
-  twt_build_dir = "${path.module}/../../../code/twitter_build"
-}
-
-resource "null_resource" "twitter_lambda_build" {
-  triggers = {
-    source_hash = filemd5(var.twt_source_file_path)
-  }
-
-provisioner "local-exec" {
-
-    command = <<EOT
-      pip install kaggle -t ../../../code/twitter_build/ --quiet
-      copy ..\..\..\code\twitter_lambda.py ..\..\..\code\twitter_build\
-    EOT
-  }
 }
 
 
@@ -164,12 +154,12 @@ module "twitter_lambda" {
   #source_file_path = var.twt_source_file_path
   #output_zip_path = var.twt_output_zip_path
   source_file_path = var.twt_source_file_path  
-  build_dir        = local.twt_build_dir        
   output_zip_path  = var.twt_output_zip_path
 
   handler = var.twt_handler
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy = true
 
   environment_variables = {
     S3_BUCKET_NAME = var.s3_bronze_bucket_name
@@ -187,7 +177,53 @@ module "twitter_daily_schedule" {
   lambda_function_name = module.twitter_lambda.lambda_function_name
 }
 
+module "normalize_hn_lambda" {
+  source = "../../modules/lambda"
 
+  function_name = var.normalize_hn_lambda_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.normalize_hn_source_file_path
+  output_zip_path  = var.normalize_hn_output_zip_path
+  handler = var.normalize_hn_lambda_handler
+
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy = true
+
+layers = [
+  "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
+]
+  environment_variables = {
+    BRONZE_BUCKET_NAME = var.s3_bronze_bucket_name
+    SILVER_BUCKET_NAME = var.s3_silver_bucket_name
+  }
+}
+
+#allow s3 bucket to invoke lambda
+resource "aws_lambda_permission" "allow_s3_to_invoke_normalize" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = module.normalize_hn_lambda.lambda_function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.s3_bronze_layer.bucket_arn
+}
+
+#s3 trigger
+resource "aws_s3_bucket_notification" "bronze_bucket_notification" {
+  bucket = module.s3_bronze_layer.bucket_id
+
+  lambda_function {
+    lambda_function_arn = module.normalize_hn_lambda.lambda_arn
+    events              = ["s3:ObjectCreated:*"]  
+    filter_suffix       = ".json"               
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_to_invoke_normalize]
+}
 
 # Notification SG and Lambda impl
 module "notifier_sg" {
@@ -219,6 +255,7 @@ module "discord_notification_lambda" {
   output_zip_path  = var.discord_notification_zip_path
   handler          = var.discord_notification_lambda_handler
 
+  lambda_s3_write_policy_arn = null
   attach_s3_policy = false
 
   environment_variables = {
@@ -358,19 +395,6 @@ resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
     }
   }
 }
-
-
-#resource "aws_lambda_permission" "allow_lambda_destination" {
-#  for_each = toset([
-#    module.hacker_news_lambda.lambda_arn,
-#    module.twitter_lambda.lambda_arn
-#  ])
-#  statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
-#  action        = "lambda:InvokeFunction"
-#  function_name = module.discord_notification_lambda.lambda_function_name
-#  principal     = "lambda.amazonaws.com"
-#  source_arn    = each.value
-#}
 
 
 
