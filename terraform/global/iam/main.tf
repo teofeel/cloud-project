@@ -110,3 +110,4 @@ resource "aws_iam_role_policy_attachment" "discord_notifier_logs_attach" {
   role       = aws_iam_role.discord_notifier_role.name
   policy_arn = aws_iam_policy.discord_notifier_policy.arn
 }
+
