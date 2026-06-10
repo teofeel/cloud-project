@@ -124,6 +124,7 @@ module "hacker_news_lambda" {
   handler = var.hn_handler
 
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  attach_s3_policy = true
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
   
   environment_variables = {
@@ -137,24 +138,6 @@ module "hacker_news_daily_schedule" {
   schedule_expression  = "cron(0 1 * * ? *)"
   lambda_arn           = module.hacker_news_lambda.lambda_arn
   lambda_function_name = module.hacker_news_lambda.lambda_function_name
-}
-
-locals {
-  twt_build_dir = "${path.module}/../../../code/twitter_build"
-}
-
-resource "null_resource" "twitter_lambda_build" {
-  triggers = {
-    source_hash = filemd5(var.twt_source_file_path)
-  }
-
-provisioner "local-exec" {
-
-    command = <<EOT
-      pip install kaggle -t ../../../code/twitter_build/ --quiet
-      copy ..\..\..\code\twitter_lambda.py ..\..\..\code\twitter_build\
-    EOT
-  }
 }
 
 
@@ -171,12 +154,12 @@ module "twitter_lambda" {
   #source_file_path = var.twt_source_file_path
   #output_zip_path = var.twt_output_zip_path
   source_file_path = var.twt_source_file_path  
-  build_dir        = local.twt_build_dir        
   output_zip_path  = var.twt_output_zip_path
 
   handler = var.twt_handler
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy = true
 
   environment_variables = {
     S3_BUCKET_NAME = var.s3_bronze_bucket_name
@@ -209,9 +192,11 @@ module "normalize_hn_lambda" {
 
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy = true
 
-  layers = ["arn:aws:lambda:eu-west-1:336392350081:layer:AWSSDKPandas-Python310:14"]
-
+layers = [
+  "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
+]
   environment_variables = {
     BRONZE_BUCKET_NAME = var.s3_bronze_bucket_name
     SILVER_BUCKET_NAME = var.s3_silver_bucket_name
@@ -229,7 +214,7 @@ resource "aws_lambda_permission" "allow_s3_to_invoke_normalize" {
 
 #s3 trigger
 resource "aws_s3_bucket_notification" "bronze_bucket_notification" {
-  bucket = module.s3_bronze_layer.bucket_name
+  bucket = module.s3_bronze_layer.bucket_id
 
   lambda_function {
     lambda_function_arn = module.normalize_hn_lambda.lambda_arn
@@ -271,6 +256,7 @@ module "discord_notification_lambda" {
   handler          = var.discord_notification_lambda_handler
 
   lambda_s3_write_policy_arn = null
+  attach_s3_policy = false
 
   environment_variables = {
     DISCORD_WEBHOOK_URL = var.discord_webhook_url
@@ -320,17 +306,28 @@ resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
   }
 }
 
-resource "aws_lambda_permission" "allow_lambda_destination" {
-  for_each = toset([
-    module.hacker_news_lambda.lambda_arn,
-    module.twitter_lambda.lambda_arn
-  ])
-  statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
-  action        = "lambda:InvokeFunction"
-  function_name = module.discord_notification_lambda.lambda_function_name
-  principal     = "lambda.amazonaws.com"
-  source_arn    = each.value
-}
+# resource "aws_lambda_permission" "allow_lambda_destination" {
+#   for_each = toset([
+#     module.hacker_news_lambda.lambda_arn,
+#     module.twitter_lambda.lambda_arn
+#   ])
+#   statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
+#   action        = "lambda:InvokeFunction"
+#   function_name = module.discord_notification_lambda.lambda_function_name
+#   principal     = "lambda.amazonaws.com"
+#   source_arn    = each.value
+# }
 
+resource "aws_lambda_permission" "allow_lambda_destination" {
+  for_each = {
+    "hacker_news" = module.hacker_news_lambda.lambda_arn
+    "twitter"     = module.twitter_lambda.lambda_arn
+  }
+
+  statement_id  = "AllowExecutionFromDestination-${each.key}"
+  action        = "lambda:InvokeFunction"
+  function_name = each.value
+  principal     = "lambda.amazonaws.com" 
+}
 
 
