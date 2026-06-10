@@ -82,6 +82,10 @@ variable "s3_bronze_bucket_name" {
   type = string
 }
 
+variable "s3_silver_bucket_name" {
+  type = string
+}
+
 variable "hacker_news_lambda_name" {
   type = string
 }
@@ -111,6 +115,22 @@ variable "twt_source_file_path" {
 }
 
 variable "twt_output_zip_path" {
+  type = string
+}
+
+variable "normalize_hn_lambda_handler" {
+  type = string
+}
+
+variable "normalize_hn_lambda_name" {
+  type = string
+}
+
+variable "normalize_hn_source_file_path" {
+  type = string
+}
+
+variable "normalize_hn_output_zip_path" {
   type = string
 }
 

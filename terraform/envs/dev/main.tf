@@ -84,6 +84,12 @@ module "s3_bronze_layer" {
   environment = "dev"
 }
 
+module "s3_silver_layer"{
+  source = "../../modules/s3"
+  bucket_name = var.s3_silver_bucket_name
+  environment = "dev"
+}
+
 resource "aws_iam_policy" "lambda_s3_write_policy" {
   name        = "LambdaS3BronzeWritePolicy"
   path        = "/"
@@ -95,8 +101,9 @@ resource "aws_iam_policy" "lambda_s3_write_policy" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["s3:PutObject",]
-        Resource = "${module.s3_bronze_layer.bucket_arn}/*" 
+        Action   = ["s3:PutObject","s3:GetObject"]
+        Resource = ["${module.s3_bronze_layer.bucket_arn}/*",
+        "${module.s3_silver_layer.bucket_arn}/*"] 
       },
     ]
   })
@@ -187,7 +194,51 @@ module "twitter_daily_schedule" {
   lambda_function_name = module.twitter_lambda.lambda_function_name
 }
 
+module "normalize_hn_lambda" {
+  source = "../../modules/lambda"
 
+  function_name = var.normalize_hn_lambda_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.normalize_hn_source_file_path
+  output_zip_path  = var.normalize_hn_output_zip_path
+  handler = var.normalize_hn_lambda_handler
+
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+
+  layers = ["arn:aws:lambda:eu-west-1:336392350081:layer:AWSSDKPandas-Python310:14"]
+
+  environment_variables = {
+    BRONZE_BUCKET_NAME = var.s3_bronze_bucket_name
+    SILVER_BUCKET_NAME = var.s3_silver_bucket_name
+  }
+}
+
+#allow s3 bucket to invoke lambda
+resource "aws_lambda_permission" "allow_s3_to_invoke_normalize" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = module.normalize_hn_lambda.lambda_function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.s3_bronze_layer.bucket_arn
+}
+
+#s3 trigger
+resource "aws_s3_bucket_notification" "bronze_bucket_notification" {
+  bucket = module.s3_bronze_layer.bucket_name
+
+  lambda_function {
+    lambda_function_arn = module.normalize_hn_lambda.lambda_arn
+    events              = ["s3:ObjectCreated:*"]  
+    filter_suffix       = ".json"               
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_to_invoke_normalize]
+}
 
 # Notification SG and Lambda impl
 module "notifier_sg" {

@@ -27,6 +27,8 @@ resource "aws_lambda_function" "this" {
       security_group_ids = var.security_group_ids
     }
 
+    layers = var.layers
+
     #environment {
     #  variables = {
     #    S3_BUCKET_NAME = var.s3_bucket_name
