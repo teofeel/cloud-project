@@ -284,50 +284,117 @@ resource "aws_iam_role_policy_attachment" "attach_invoke_discord_policy" {
 }
 
 
-resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
-  function_name = module.hacker_news_lambda.lambda_function_name
+module "sqs_jobs_failure" {
+  source = "../../modules/sqs"
+  queue_name = "job-failures-queue"
+  visibility_timeout_seconds = 900
+}
 
+module "sns_jobs_failure" {
+  source = "../../modules/sns"
+  
+  sns_topic_name = "job-failures"
+  sns_protocol = "sqs"
+  sns_endpoint = module.sqs_jobs_failure.sqs_queue_arn
+  raw_message_delivery = true
+}
+
+resource "aws_iam_policy" "lambda_sns_publish_policy" {
+  name = "LambdaSNSPublishPolicy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "sns:Publish"
+      Resource = module.sns_jobs_failure.sns_topic_arn
+    }]
+  })
+}
+
+resource "aws_sqs_queue_policy" "queue_policy" {
+  queue_url = module.sqs_jobs_failure.sqs_queue_url
+
+  policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowSNSToSendMessage",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "sns.amazonaws.com"
+        },
+        "Action": "sqs:SendMessage",
+        "Resource": module.sqs_jobs_failure.sqs_queue_arn,
+        "Condition": {
+          "ArnEquals": {
+            "aws:SourceArn": module.sns_jobs_failure.sns_topic_arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_sns_publish_policy" {
+  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
+}
+
+#resource "aws_lambda_permission" "allow_sns_invoke_lambda" {
+#  statement_id  = "AllowSNSInvokeDiscordNotifier"
+#  action        = "lambda:InvokeFunction"
+#  function_name = module.discord_notification_lambda.lambda_function_name
+#  principal     = "sns.amazonaws.com"
+#  source_arn    = module.sns_jobs_failure.sns_topic_arn
+#}
+resource "aws_iam_role_policy" "discord_lambda_sqs_policy" {
+  name = "DiscordLambdaSQSPolicy"
+  role = data.terraform_remote_state.iam.outputs.discord_notifier_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = [module.sqs_jobs_failure.sqs_queue_arn]
+      }
+    ]
+  })
+}
+resource "aws_lambda_event_source_mapping" "sqs_to_lambda" {
+  event_source_arn = module.sqs_jobs_failure.sqs_queue_arn
+  function_name    = module.discord_notification_lambda.lambda_function_name
+  batch_size       = 10 
+  enabled          = true
+}
+
+resource "aws_lambda_function_event_invoke_config" "hacker_news_on_failure" {
+  function_name          = module.hacker_news_lambda.lambda_function_name
   maximum_retry_attempts = 0
+
   destination_config {
     on_failure {
-      destination = module.discord_notification_lambda.lambda_arn
+      destination = module.sns_jobs_failure.sns_topic_arn
     }
   }
 }
 
 resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
-  function_name = module.twitter_lambda.lambda_function_name
-
+  function_name          = module.twitter_lambda.lambda_function_name
   maximum_retry_attempts = 0
+
   destination_config {
     on_failure {
-      destination = module.discord_notification_lambda.lambda_arn
+      destination = module.sns_jobs_failure.sns_topic_arn
     }
   }
 }
 
-# resource "aws_lambda_permission" "allow_lambda_destination" {
-#   for_each = toset([
-#     module.hacker_news_lambda.lambda_arn,
-#     module.twitter_lambda.lambda_arn
-#   ])
-#   statement_id  = "AllowLambdaDestinationInvoke-${element(split(":", each.value), 6)}"
-#   action        = "lambda:InvokeFunction"
-#   function_name = module.discord_notification_lambda.lambda_function_name
-#   principal     = "lambda.amazonaws.com"
-#   source_arn    = each.value
-# }
-
-resource "aws_lambda_permission" "allow_lambda_destination" {
-  for_each = {
-    "hacker_news" = module.hacker_news_lambda.lambda_arn
-    "twitter"     = module.twitter_lambda.lambda_arn
-  }
-
-  statement_id  = "AllowExecutionFromDestination-${each.key}"
-  action        = "lambda:InvokeFunction"
-  function_name = each.value
-  principal     = "lambda.amazonaws.com" 
-}
 
 
