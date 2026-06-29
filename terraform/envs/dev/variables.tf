@@ -134,6 +134,21 @@ variable "normalize_hn_output_zip_path" {
   type = string
 }
 
+variable "normalize_x_lambda_handler" {
+  type = string
+}
+
+variable "normalize_x_lambda_name" {
+  type = string
+}
+
+variable "normalize_x_source_file_path" {
+  type = string
+}
+
+variable "normalize_x_output_zip_path" {
+  type = string
+}
 
 variable "discord_notification_lambda_name" {
   type = string
