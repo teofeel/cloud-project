@@ -59,7 +59,7 @@ def lambda_handler(event, context):
             "user_id": str(uuid.uuid4()),
             "username": author,
             "platform": "Hacker News",
-            "karma_score": pd.NA, "is_verified": pd.NA, "created_at": pd.NA   
+            "karma_score": pd.NA, "is_verified": pd.NA, "created_at": pd.NA   , "user_followers":pd.NA
         })
 
     df_users = pd.DataFrame(users_list).drop_duplicates(subset=['username'])
