@@ -52,7 +52,8 @@ def lambda_handler(event, context):
             "content_text": clean_text,
             "created_at": iso_time, 
             "post_type": post_type,
-            "year": year, "month": month, "day": day
+            "year": year, "month": month, "day": day,
+            "score":item.get("points")
         })
 
         users_list.append({

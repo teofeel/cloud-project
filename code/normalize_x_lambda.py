@@ -48,7 +48,8 @@ def lambda_handler(event, context):
                     "content_text": str(row.get("text", "")),
                     "created_at": iso_time,
                     "post_type": "tweet",
-                    "year": year, "month": month, "day": day
+                    "year": year, "month": month, "day": day,
+                    "score": pd.NA
                 })
 
                 try:
