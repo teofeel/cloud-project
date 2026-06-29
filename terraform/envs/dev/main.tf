@@ -101,6 +101,16 @@ resource "aws_iam_policy" "lambda_s3_write_policy" {
     Statement = [
       {
         Effect   = "Allow"
+        Action   = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          module.s3_bronze_layer.bucket_arn,
+          module.s3_silver_layer.bucket_arn
+        ]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["s3:PutObject","s3:GetObject"]
         Resource = ["${module.s3_bronze_layer.bucket_arn}/*",
         "${module.s3_silver_layer.bucket_arn}/*"] 
@@ -189,6 +199,32 @@ module "normalize_hn_lambda" {
   source_file_path = var.normalize_hn_source_file_path
   output_zip_path  = var.normalize_hn_output_zip_path
   handler = var.normalize_hn_lambda_handler
+
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy = true
+
+layers = [
+  "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
+]
+  environment_variables = {
+    BRONZE_BUCKET_NAME = var.s3_bronze_bucket_name
+    SILVER_BUCKET_NAME = var.s3_silver_bucket_name
+  }
+}
+
+module "normalize_x_lambda" {
+  source = "../../modules/lambda"
+
+  function_name = var.normalize_x_lambda_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.normalize_x_source_file_path
+  output_zip_path  = var.normalize_x_output_zip_path
+  handler = var.normalize_x_lambda_handler
 
   iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
