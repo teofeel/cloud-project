@@ -86,6 +86,10 @@ variable "s3_silver_bucket_name" {
   type = string
 }
 
+variable "s3_gold_bucket_name" {
+  type = string
+}
+
 variable "hacker_news_lambda_name" {
   type = string
 }
@@ -147,6 +151,38 @@ variable "normalize_x_source_file_path" {
 }
 
 variable "normalize_x_output_zip_path" {
+  type = string
+}
+
+variable "transform_hn_lambda_name" {
+  type = string
+}
+
+variable "transform_hn_source_file_path" {
+  type = string
+}
+
+variable "transform_hn_output_zip_path" {
+  type = string
+}
+
+variable "transform_hn_lambda_handler" {
+  type = string
+}
+
+variable "transform_x_lambda_name" {
+  type = string
+}
+
+variable "transform_x_source_file_path" {
+  type = string
+}
+
+variable "transform_x_output_zip_path" {
+  type = string
+}
+
+variable "transform_x_lambda_handler" {
   type = string
 }
 

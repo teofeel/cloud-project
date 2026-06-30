@@ -90,30 +90,37 @@ module "s3_silver_layer" {
   environment = "dev"
 }
 
+module "s3_gold_layer" {
+  source      = "../../modules/s3"
+  bucket_name = var.s3_gold_bucket_name
+  environment = "dev"
+}
+
 resource "aws_iam_policy" "lambda_s3_write_policy" {
   name        = "LambdaS3BronzeWritePolicy"
   path        = "/"
   description = "Allowing lambda to write in s3"
 
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
-          "s3:ListBucket"
-        ]
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
         Resource = [
           module.s3_bronze_layer.bucket_arn,
-          module.s3_silver_layer.bucket_arn
+          module.s3_silver_layer.bucket_arn,
+          module.s3_gold_layer.bucket_arn
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject","s3:GetObject"]
-        Resource = ["${module.s3_bronze_layer.bucket_arn}/*",
-        "${module.s3_silver_layer.bucket_arn}/*"]
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetObject"]
+        Resource = [
+          "${module.s3_bronze_layer.bucket_arn}/*",
+          "${module.s3_silver_layer.bucket_arn}/*",
+          "${module.s3_gold_layer.bucket_arn}/*"
+        ]
       },
     ]
   })
@@ -216,7 +223,7 @@ module "normalize_hn_lambda" {
 module "normalize_x_lambda" {
   source = "../../modules/lambda"
 
-  function_name = var.normalize_x_lambda_name
+  function_name   = var.normalize_x_lambda_name
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
@@ -224,18 +231,72 @@ module "normalize_x_lambda" {
 
   source_file_path = var.normalize_x_source_file_path
   output_zip_path  = var.normalize_x_output_zip_path
-  handler = var.normalize_x_lambda_handler
+  handler          = var.normalize_x_lambda_handler
 
-  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
   lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
-  attach_s3_policy = true
+  attach_s3_policy           = true
 
-layers = [
-  "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
-]
+  layers = [
+    "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
+  ]
   environment_variables = {
     BRONZE_BUCKET_NAME = var.s3_bronze_bucket_name
     SILVER_BUCKET_NAME = var.s3_silver_bucket_name
+  }
+}
+
+module "transform_hn_lambda" {
+  source = "../../modules/lambda"
+
+  function_name   = var.transform_hn_lambda_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.transform_hn_source_file_path
+  output_zip_path  = var.transform_hn_output_zip_path
+  handler          = var.transform_hn_lambda_handler
+
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy           = true
+
+  layers = [
+    "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
+  ]
+
+  environment_variables = {
+    GOLD_BUCKET_NAME = var.s3_gold_bucket_name
+  }
+
+}
+
+module "transform_x_lambda" {
+  source = "../../modules/lambda"
+
+  function_name   = var.transform_x_lambda_name
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.collectors_sg.sg_id]
+
+  source_file_path = var.transform_x_source_file_path
+  output_zip_path  = var.transform_x_output_zip_path
+  handler          = var.transform_x_lambda_handler
+
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  attach_s3_policy           = true
+
+  layers = [
+    "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4"
+  ]
+
+  environment_variables = {
+    SILVER_BUCKET_NAME = var.s3_silver_bucket_name
+    GOLD_BUCKET_NAME   = var.s3_gold_bucket_name
   }
 }
 
@@ -260,6 +321,73 @@ resource "aws_s3_bucket_notification" "bronze_bucket_notification" {
 
   depends_on = [aws_lambda_permission.allow_s3_to_invoke_normalize]
 }
+
+
+resource "aws_lambda_function_event_invoke_config" "normalize_hn_on_success" {
+  function_name          = module.normalize_hn_lambda.lambda_function_name
+  maximum_retry_attempts = 0
+
+  destination_config {
+    on_success {
+      destination = module.transform_hn_lambda.lambda_arn
+    }
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
+
+resource "aws_lambda_function_event_invoke_config" "normalize_x_on_success" {
+  function_name          = module.normalize_x_lambda.lambda_function_name
+  maximum_retry_attempts = 0
+
+  destination_config {
+    on_success {
+      destination = module.transform_x_lambda.lambda_arn
+    }
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
+
+resource "aws_lambda_permission" "allow_normalize_hn_to_invoke_transform" {
+  statement_id  = "AllowNormalizeHNInvokeTransform"
+  action        = "lambda:InvokeFunction"
+  function_name = module.transform_hn_lambda.lambda_function_name
+  principal     = "lambda.amazonaws.com"
+  source_arn    = module.normalize_hn_lambda.lambda_arn
+}
+
+resource "aws_lambda_permission" "allow_normalize_x_to_invoke_transform" {
+  statement_id  = "AllowNormalizeXInvokeTransform"
+  action        = "lambda:InvokeFunction"
+  function_name = module.transform_x_lambda.lambda_function_name
+  principal     = "lambda.amazonaws.com"
+  source_arn    = module.normalize_x_lambda.lambda_arn
+}
+
+resource "aws_iam_policy" "lambda_invoke_transform_policy" {
+  name = "LambdaInvokeTransformPolicy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "lambda:InvokeFunction"
+      Resource = [
+        module.transform_hn_lambda.lambda_arn,
+        module.transform_x_lambda.lambda_arn
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_invoke_transform_policy" {
+  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  policy_arn = aws_iam_policy.lambda_invoke_transform_policy.arn
+}
+
 
 # Notification SG and Lambda impl
 module "notifier_sg" {

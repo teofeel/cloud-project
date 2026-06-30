@@ -64,7 +64,7 @@ def lambda_handler(event, context):
                     "username": author,
                     "platform": "X",
                     "karma_score": pd.NA,
-                    "is_verified": row.get("user_verified", pd.NA),
+                    "is_verified":  str(row.get("user_verified")) if pd.notna(row.get("user_verified")) else pd.NA,
                     "created_at": user_created_at_iso,
                     "user_followers": row.get("user_followers", pd.NA)
                 })
@@ -74,6 +74,7 @@ def lambda_handler(event, context):
 
         
             if not df_users.empty:
+                df_users['is_verified'] = df_users['is_verified'].astype('string')
                 wr.s3.to_parquet(df=df_users, path=f"{silver_path}users/", dataset=True, mode="append", partition_cols=['platform'])
                 
             if not df_posts.empty:

@@ -26,7 +26,8 @@ def lambda_handler(event, context):
             try:
                 with urllib.request.urlopen(url) as response:
                     data = json.loads(response.read().decode("utf-8"))
-            except Exception:
+            except Exception as e:
+                print(f"Request failed: {e}")
                 break
                 
             hits = data.get("hits", [])
@@ -37,6 +38,8 @@ def lambda_handler(event, context):
             page += 1
             
         current_start = current_end
+    
+    print(f"Collected {len(all_hits)} items")
         
     s3.put_object(
         Bucket=bucket_name,
