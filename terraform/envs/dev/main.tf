@@ -69,6 +69,13 @@ resource "aws_route" "private_internet_access" {
 
 
 # create sg for collectors lambda that will send req to tw and hn
+data "aws_region" "current" {}
+data "aws_ec2_managed_prefix_list" "s3" {
+  filter {
+    name   = "prefix-list-name"
+    values = ["com.amazonaws.${data.aws_region.current.region}.s3"]
+  }
+}
 module "collectors_sg" {
   source  = "../../modules/security_groups"
   sg_name = var.collectors_sg_name
