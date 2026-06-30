@@ -69,12 +69,61 @@ resource "aws_route" "private_internet_access" {
 
 
 # create sg for collectors lambda that will send req to tw and hn
+data "aws_region" "current" {}
+data "aws_ec2_managed_prefix_list" "s3" {
+  filter {
+    name   = "prefix-list-name"
+    values = ["com.amazonaws.${data.aws_region.current.region}.s3"]
+  }
+}
 module "collectors_sg" {
   source  = "../../modules/security_groups"
   sg_name = var.collectors_sg_name
   vpc_id  = module.aws_vpc.vpc_id
 
   ingress_rules = []
+}
+
+module "normalize_sg" {
+  source  = "../../modules/security_groups"
+  sg_name = var.normalize_sg_name
+  vpc_id  = module.aws_vpc.vpc_id
+
+  ingress_rules = []
+  egress_rules = [
+    {
+      from_port       = 443
+      to_port         = 443
+      protocol        = "tcp"
+      prefix_list_ids = [data.aws_ec2_managed_prefix_list.s3.id]
+    }
+  ]
+}
+
+module "transform_sg" {
+  source  = "../../modules/security_groups"
+  sg_name = var.transform_sg_name
+  vpc_id  = module.aws_vpc.vpc_id
+
+  ingress_rules = []
+  egress_rules = [
+    {
+      from_port       = 443
+      to_port         = 443
+      protocol        = "tcp"
+      prefix_list_ids = [data.aws_ec2_managed_prefix_list.s3.id]
+    }
+  ]
+}
+
+
+## gateway endpoint for s3
+module "s3_gateway_endpoint" {
+  source                  = "../../modules/gateway_endpoint"
+  vpc_id                  = module.aws_vpc.vpc_id
+  service_name            = "com.amazonaws.eu-west-1.s3"
+  endpoint_type           = "Gateway"
+  private_route_table_ids = [module.aws_vpc.private_route_table_id]
 }
 
 #s3 module
@@ -201,7 +250,7 @@ module "normalize_hn_lambda" {
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
-  security_group_ids = [module.collectors_sg.sg_id]
+  security_group_ids = [module.normalize_sg.sg_id]
 
   source_file_path = var.normalize_hn_source_file_path
   output_zip_path  = var.normalize_hn_output_zip_path
@@ -227,7 +276,7 @@ module "normalize_x_lambda" {
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
-  security_group_ids = [module.collectors_sg.sg_id]
+  security_group_ids = [module.normalize_sg.sg_id]
 
   source_file_path = var.normalize_x_source_file_path
   output_zip_path  = var.normalize_x_output_zip_path
@@ -253,7 +302,7 @@ module "transform_hn_lambda" {
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
-  security_group_ids = [module.collectors_sg.sg_id]
+  security_group_ids = [module.transform_sg.sg_id]
 
   source_file_path = var.transform_hn_source_file_path
   output_zip_path  = var.transform_hn_output_zip_path
@@ -280,7 +329,7 @@ module "transform_x_lambda" {
   lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
-  security_group_ids = [module.collectors_sg.sg_id]
+  security_group_ids = [module.transform_sg.sg_id]
 
   source_file_path = var.transform_x_source_file_path
   output_zip_path  = var.transform_x_output_zip_path
@@ -301,8 +350,8 @@ module "transform_x_lambda" {
 }
 
 #allow s3 bucket to invoke lambda
-resource "aws_lambda_permission" "allow_s3_to_invoke_normalize" {
-  statement_id  = "AllowExecutionFromS3Bucket"
+resource "aws_lambda_permission" "allow_s3_to_invoke_normalize_hn" {
+  statement_id  = "AllowExecutionFromS3BucketHN"
   action        = "lambda:InvokeFunction"
   function_name = module.normalize_hn_lambda.lambda_function_name
   principal     = "s3.amazonaws.com"
@@ -319,7 +368,9 @@ resource "aws_s3_bucket_notification" "bronze_bucket_notification" {
     filter_suffix       = ".json"
   }
 
-  depends_on = [aws_lambda_permission.allow_s3_to_invoke_normalize]
+
+  depends_on = [aws_lambda_permission.allow_s3_to_invoke_normalize_hn]
+
 }
 
 
@@ -505,13 +556,6 @@ resource "aws_iam_role_policy_attachment" "attach_sns_publish_policy" {
   policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
 }
 
-#resource "aws_lambda_permission" "allow_sns_invoke_lambda" {
-#  statement_id  = "AllowSNSInvokeDiscordNotifier"
-#  action        = "lambda:InvokeFunction"
-#  function_name = module.discord_notification_lambda.lambda_function_name
-#  principal     = "sns.amazonaws.com"
-#  source_arn    = module.sns_jobs_failure.sns_topic_arn
-#}
 resource "aws_iam_role_policy" "discord_lambda_sqs_policy" {
   name = "DiscordLambdaSQSPolicy"
   role = data.terraform_remote_state.iam.outputs.discord_notifier_role_name
@@ -561,4 +605,24 @@ resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
 }
 
 
+resource "aws_lambda_function_event_invoke_config" "transform_x_on_failure"{
+  function_name = module.transform_x_lambda.lambda_function_name
+  maximum_retry_attempts = 0
 
+  destination_config {
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
+
+resource "aws_lambda_function_event_invoke_config" "transform_hn_on_failure"{
+  function_name = module.transform_hn_lambda.lambda_function_name
+  maximum_retry_attempts = 0
+
+  destination_config {
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
