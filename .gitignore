@@ -58,3 +58,4 @@ terraform/envs/dev/discord_notifier_lambda.zip
 /code/twitter_build
 terraform/envs/dev/twitter_lambda.zip
 
+terraform/envs/dev/secrets.tfvars

@@ -211,11 +211,19 @@ variable "discord_failure_notification_rule_name" {
 }
 
 variable "kaggle_username" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
 }
 
 variable "kaggle_key" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
+}
+
+variable "normalize_sg_name" {
+  type = string
+}
+
+variable "transform_sg_name" {
+  type = string
 }
