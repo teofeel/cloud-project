@@ -30,6 +30,22 @@ output "injector_role_name" {
   value = aws_iam_role.injector_lambda_role.name
 }
 
+output "normalizer_role_arn" {
+  value = aws_iam_role.normalizer_lambda_role.arn
+}
+
+output "normalizer_role_name" {
+  value = aws_iam_role.normalizer_lambda_role.name
+}
+
+output "transform_role_arn" {
+  value = aws_iam_role.transform_lambda_role.arn
+}
+
+output "transform_role_name" {
+  value = aws_iam_role.transform_lambda_role.name
+}
+
 output "discord_notifier_role_arn" {
   value = aws_iam_role.discord_notifier_role.arn
 }

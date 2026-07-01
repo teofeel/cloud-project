@@ -145,11 +145,30 @@ module "s3_gold_layer" {
   environment = "dev"
 }
 
-resource "aws_iam_policy" "lambda_s3_write_policy" {
-  name        = "LambdaS3BronzeWritePolicy"
-  path        = "/"
-  description = "Allowing lambda to write in s3"
 
+resource "aws_iam_policy" "collector_s3_policy" {
+  name        = "CollectorS3BronzeWritePolicy"
+  description = "Write-only access to bronze bucket"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [module.s3_bronze_layer.bucket_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = ["${module.s3_bronze_layer.bucket_arn}/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "normalizer_s3_policy" {
+  name        = "NormalizerS3Policy"
+  description = "Read bronze, write silver"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -159,18 +178,46 @@ resource "aws_iam_policy" "lambda_s3_write_policy" {
         Resource = [
           module.s3_bronze_layer.bucket_arn,
           module.s3_silver_layer.bucket_arn,
-          module.s3_gold_layer.bucket_arn
         ]
       },
       {
         Effect = "Allow"
+        Action = ["s3:GetObject"]
+        Resource = ["${module.s3_bronze_layer.bucket_arn}/*"]
+      },
+      {
+        Effect = "Allow"
         Action = ["s3:PutObject", "s3:GetObject"]
+        Resource = ["${module.s3_silver_layer.bucket_arn}/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "transform_s3_policy" {
+  name        = "TransformS3Policy"
+  description = "Read silver, write gold"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
         Resource = [
-          "${module.s3_bronze_layer.bucket_arn}/*",
-          "${module.s3_silver_layer.bucket_arn}/*",
-          "${module.s3_gold_layer.bucket_arn}/*"
+          module.s3_silver_layer.bucket_arn,
+          module.s3_gold_layer.bucket_arn,
         ]
       },
+      {
+        Effect = "Allow"
+        Action = ["s3:GetObject"]
+        Resource = ["${module.s3_silver_layer.bucket_arn}/*"]
+      },
+      {
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetObject"]
+        Resource = ["${module.s3_gold_layer.bucket_arn}/*"]
+      }
     ]
   })
 }
@@ -191,7 +238,7 @@ module "hacker_news_lambda" {
 
   iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
   attach_s3_policy           = true
-  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  lambda_s3_write_policy_arn = aws_iam_policy.collector_s3_policy.arn
 
   environment_variables = {
     S3_BUCKET_NAME = var.s3_bronze_bucket_name
@@ -224,7 +271,7 @@ module "twitter_lambda" {
 
   handler                    = var.twt_handler
   iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
-  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  lambda_s3_write_policy_arn = aws_iam_policy.collector_s3_policy.arn
   attach_s3_policy           = true
 
   environment_variables = {
@@ -247,7 +294,7 @@ module "normalize_hn_lambda" {
   source = "../../modules/lambda"
 
   function_name   = var.normalize_hn_lambda_name
-  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.normalizer_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
   security_group_ids = [module.normalize_sg.sg_id]
@@ -256,8 +303,8 @@ module "normalize_hn_lambda" {
   output_zip_path  = var.normalize_hn_output_zip_path
   handler          = var.normalize_hn_lambda_handler
 
-  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
-  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.normalizer_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.normalizer_s3_policy.arn
   attach_s3_policy           = true
 
   layers = [
@@ -273,7 +320,7 @@ module "normalize_x_lambda" {
   source = "../../modules/lambda"
 
   function_name   = var.normalize_x_lambda_name
-  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.normalizer_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
   security_group_ids = [module.normalize_sg.sg_id]
@@ -282,8 +329,8 @@ module "normalize_x_lambda" {
   output_zip_path  = var.normalize_x_output_zip_path
   handler          = var.normalize_x_lambda_handler
 
-  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
-  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.normalizer_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.normalizer_s3_policy.arn
   attach_s3_policy           = true
 
   layers = [
@@ -299,7 +346,7 @@ module "transform_hn_lambda" {
   source = "../../modules/lambda"
 
   function_name   = var.transform_hn_lambda_name
-  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.transform_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
   security_group_ids = [module.transform_sg.sg_id]
@@ -308,8 +355,8 @@ module "transform_hn_lambda" {
   output_zip_path  = var.transform_hn_output_zip_path
   handler          = var.transform_hn_lambda_handler
 
-  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
-  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.transform_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.transform_s3_policy.arn
   attach_s3_policy           = true
 
   layers = [
@@ -326,7 +373,7 @@ module "transform_x_lambda" {
   source = "../../modules/lambda"
 
   function_name   = var.transform_x_lambda_name
-  lambda_role_arn = data.terraform_remote_state.iam.outputs.lambda_role_arn
+  lambda_role_arn = data.terraform_remote_state.iam.outputs.transform_role_arn
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
   security_group_ids = [module.transform_sg.sg_id]
@@ -335,8 +382,8 @@ module "transform_x_lambda" {
   output_zip_path  = var.transform_x_output_zip_path
   handler          = var.transform_x_lambda_handler
 
-  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.lambda_role_name
-  lambda_s3_write_policy_arn = aws_iam_policy.lambda_s3_write_policy.arn
+  iam_lambda_role_name       = data.terraform_remote_state.iam.outputs.transform_role_name
+  lambda_s3_write_policy_arn = aws_iam_policy.transform_s3_policy.arn
   attach_s3_policy           = true
 
   layers = [
@@ -435,7 +482,7 @@ resource "aws_iam_policy" "lambda_invoke_transform_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "attach_invoke_transform_policy" {
-  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  role       = data.terraform_remote_state.iam.outputs.normalizer_role_name
   policy_arn = aws_iam_policy.lambda_invoke_transform_policy.arn
 }
 
@@ -551,8 +598,18 @@ resource "aws_sqs_queue_policy" "queue_policy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "attach_sns_publish_policy" {
+resource "aws_iam_role_policy_attachment" "attach_sns_collector" {
   role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "attach_sns_normalizer" {
+  role       = data.terraform_remote_state.iam.outputs.normalizer_role_name
+  policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "attach_sns_transform" {
+  role       = data.terraform_remote_state.iam.outputs.transform_role_name
   policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
 }
 
