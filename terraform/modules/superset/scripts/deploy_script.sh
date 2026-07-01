@@ -1,15 +1,32 @@
 #!/bin/bash
+set -euo pipefail
+
 dnf update -y
 dnf install docker -y
+
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+
 systemctl start docker
 systemctl enable docker
-usermod -a -G docker ec2-use
+usermod -a -G docker ec2-user
 
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
+mkdir -p /home/ec2-user/superset_config
+
 cat <<'EOF' > /home/ec2-user/schema.sql
 ${DDL_SCHEMA}
+EOF
+
+cat <<'EOF' > /home/ec2-user/superset_config/superset_config.py
+import os
+
+SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
+SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY")
 EOF
 
 cat <<'EOF' > /home/ec2-user/docker-compose.yaml
@@ -45,9 +62,10 @@ services:
     environment: &superset-env
       SUPERSET_SECRET_KEY: "IKN+MO1nNjb5gyOjmSE3jzISQFM3F6dsZV8M9osmdLpqD5LKP32NCTQH"
       SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://admin:${DB_PASSWORD}@postgres:5432/superset"
-      PYTHONPATH: "/app/superset_home/.local/lib/python3.10/site-packages:/app/.venv/lib/python3.10/site-packages"
+      PYTHONPATH: "/app/pythonpath:/app/superset_home/.local/lib/python3.10/site-packages:/app/.venv/lib/python3.10/site-packages"
     volumes:
       - superset_home:/app/superset_home
+      - /home/ec2-user/superset_config/superset_config.py:/app/pythonpath/superset_config.py
     entrypoint: /bin/sh
     command: >
       -c "
@@ -64,10 +82,11 @@ services:
     depends_on:
       - superset-init
     environment: *superset-env
-    ports:
-      - "8088:8088"
     volumes:
       - superset_home:/app/superset_home
+      - /home/ec2-user/superset_config/superset_config.py:/app/pythonpath/superset_config.py
+    ports:
+      - "8088:8088"
     command: >
       /bin/sh -c "
       superset run -h 0.0.0.0 -p 8088 --with-threads --reload --debugger
@@ -78,21 +97,35 @@ volumes:
   superset_home:
 EOF
 
-chown ec2-user:ec2-user /home/ec2-user/schema.sql /home/ec2-user/docker-compose.yaml
+chown -R ec2-user:ec2-user /home/ec2-user/schema.sql /home/ec2-user/docker-compose.yaml /home/ec2-user/superset_config
+
+echo "Pre-installing psycopg2-binary..."
+sudo docker pull apache/superset:latest
+sudo docker volume create ec2-user_superset_home 2>/dev/null || true
+sudo docker run --rm \
+  -v ec2-user_superset_home:/app/superset_home \
+  apache/superset:latest \
+  pip install --target /app/superset_home/.local/lib/python3.10/site-packages psycopg2-binary
 
 cd /home/ec2-user
 sudo docker-compose up -d
 
-echo "Waiting for Superset..."
-sleep 20
+echo "Waiting for superset-init to finish (PostgreSQL migrations, should be fast)..."
+EXIT_CODE=$(sudo docker wait superset_init)
+if [ "$EXIT_CODE" != "0" ]; then
+  echo "superset-init failed with exit code $EXIT_CODE"
+  sudo docker logs superset_init
+  exit 1
+fi
+echo "superset-init completed successfully."
 
 echo "Applying DDL..."
-
-docker cp /home/ec2-user/schema.sql superset_postgres:/tmp/schema.sql
+sudo docker cp /home/ec2-user/schema.sql superset_postgres:/tmp/schema.sql
 sudo docker-compose exec -T postgres psql -U admin -d superset -f /tmp/schema.sql
 
 echo "Installing pg8000..."
 sudo docker exec -u root superset_app pip install psycopg2-binary pg8000
 sudo docker restart superset_app
 
-echo "Done."
+
+echo "Done"
