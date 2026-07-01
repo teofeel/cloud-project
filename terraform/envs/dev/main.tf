@@ -679,9 +679,14 @@ resource "aws_iam_policy" "lambda_s3_gold_read_policy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "attach_gold_read_to_lambda_role" {
-  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+resource "aws_iam_role_policy_attachment" "attach_gold_read_to_injector_role" {
+  role       = data.terraform_remote_state.iam.outputs.injector_role_name
   policy_arn = aws_iam_policy.lambda_s3_gold_read_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "attach_sns_to_injector_role" {
+  role       = data.terraform_remote_state.iam.outputs.injector_role_name
+  policy_arn = aws_iam_policy.lambda_sns_publish_policy.arn
 }
 
 resource "null_resource" "build_injector_layer" {
@@ -713,8 +718,8 @@ module "injector_lambda" {
   source = "../../modules/lambda"
 
   function_name        = var.injector_lambda_name
-  lambda_role_arn      = data.terraform_remote_state.iam.outputs.lambda_role_arn
-  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+  lambda_role_arn      = data.terraform_remote_state.iam.outputs.injector_role_arn
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.injector_role_name
 
   private_subnet_ids = [module.aws_vpc.private_subnet_id]
   security_group_ids = [module.injector_sg.sg_id]

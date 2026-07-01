@@ -77,13 +77,11 @@ def lambda_handler(event, context):
             database=DB_NAME, port=5432
         )
         try:
-            if not conn.run('SELECT 1 FROM public."Platform" WHERE platform_id = :id', id=platform_id):
-                conn.run('INSERT INTO public."Platform" (platform_id, platform_name) VALUES (:id, :p)',
-                         id=platform_id, p=platform_name)
-
-            if not conn.run('SELECT 1 FROM public."Date" WHERE date_id = :id', id=date_id):
-                conn.run('INSERT INTO public."Date" (date_id, "date") VALUES (:id, :d)',
-                         id=date_id, d=date_val)
+            # Upsert Platform/Date (ON CONFLICT avoids race conditions)
+            conn.run('INSERT INTO public."Platform" (platform_id, platform_name) VALUES (:id, :p) ON CONFLICT (platform_id) DO NOTHING',
+                     id=platform_id, p=platform_name)
+            conn.run('INSERT INTO public."Date" (date_id, "date") VALUES (:id, :d) ON CONFLICT (date_id) DO NOTHING',
+                     id=date_id, d=date_val)
 
             quoted = ','.join(f'"{c}"' for c in valid_cols)
             params = ','.join(f':{c}' for c in valid_cols)
