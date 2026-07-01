@@ -227,3 +227,36 @@ variable "normalize_sg_name" {
 variable "transform_sg_name" {
   type = string
 }
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "injector_sg_name" {
+  type=string
+}
+
+variable "injector_lambda_name" {
+  type = string
+}
+
+variable "injector_lambda_file_path" {
+  type = string
+}
+
+variable "injector_lambda_output_zip" {
+  type = string
+}
+
+variable "injector_lambda_handler" {
+  type = string
+}
+
+variable "db_name" {
+  type = string
+}
+
+variable "db_user"{
+  type = string
+}

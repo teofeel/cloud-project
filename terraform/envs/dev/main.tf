@@ -605,8 +605,8 @@ resource "aws_lambda_function_event_invoke_config" "twitter_on_failure" {
 }
 
 
-resource "aws_lambda_function_event_invoke_config" "transform_x_on_failure"{
-  function_name = module.transform_x_lambda.lambda_function_name
+resource "aws_lambda_function_event_invoke_config" "transform_x_on_failure" {
+  function_name          = module.transform_x_lambda.lambda_function_name
   maximum_retry_attempts = 0
 
   destination_config {
@@ -616,8 +616,153 @@ resource "aws_lambda_function_event_invoke_config" "transform_x_on_failure"{
   }
 }
 
-resource "aws_lambda_function_event_invoke_config" "transform_hn_on_failure"{
-  function_name = module.transform_hn_lambda.lambda_function_name
+resource "aws_lambda_function_event_invoke_config" "transform_hn_on_failure" {
+  function_name          = module.transform_hn_lambda.lambda_function_name
+  maximum_retry_attempts = 0
+
+  destination_config {
+    on_failure {
+      destination = module.sns_jobs_failure.sns_topic_arn
+    }
+  }
+}
+
+module "visualization_module" {
+  source = "../../modules/superset"
+
+  vpc_id               = module.aws_vpc.vpc_id
+  vpc_public_subnet_id = module.aws_vpc.public_subnet_id
+  db_password          = var.db_password
+  injector_cidr_blocks = [var.main_vpc_cidr_block]
+}
+
+module "injector_sg" {
+  source  = "../../modules/security_groups"
+  sg_name = var.injector_sg_name
+  vpc_id  = module.aws_vpc.vpc_id
+
+  ingress_rules = []
+  egress_rules = [
+    {
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      cidr_blocks = [var.main_vpc_cidr_block]
+    },
+    {
+      from_port       = 443
+      to_port         = 443
+      protocol        = "tcp"
+      prefix_list_ids = [data.aws_ec2_managed_prefix_list.s3.id]
+    }
+  ]
+}
+
+resource "aws_iam_policy" "lambda_s3_gold_read_policy" {
+  name        = "LambdaS3GoldReadPolicy"
+  description = "Readonly access to gold for injector lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [module.s3_gold_layer.bucket_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${module.s3_gold_layer.bucket_arn}/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_gold_read_to_lambda_role" {
+  role       = data.terraform_remote_state.iam.outputs.lambda_role_name
+  policy_arn = aws_iam_policy.lambda_s3_gold_read_policy.arn
+}
+
+resource "null_resource" "build_injector_layer" {
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["powershell", "-Command"]
+    command     = "Remove-Item -Force -Recurse ../../../build/injector-layer -ErrorAction SilentlyContinue; mkdir -Force ../../../build/injector-layer/python; pip install --platform manylinux_2_28_x86_64 --target ../../../build/injector-layer/python --only-binary=:all: --python-version 3.13 pg8000"
+  }
+}
+
+data "archive_file" "injector_layer_zip" {
+  depends_on  = [null_resource.build_injector_layer]
+  type        = "zip"
+  source_dir  = abspath("../../../build/injector-layer")
+  output_path = abspath("injector_layer.zip")
+}
+
+resource "aws_lambda_layer_version" "injector_deps" {
+  filename            = data.archive_file.injector_layer_zip.output_path
+  layer_name          = "injector-sqlalchemy-psycopg2"
+  compatible_runtimes = ["python3.13"]
+  source_code_hash    = data.archive_file.injector_layer_zip.output_base64sha256
+}
+
+module "injector_lambda" {
+  source = "../../modules/lambda"
+
+  function_name        = var.injector_lambda_name
+  lambda_role_arn      = data.terraform_remote_state.iam.outputs.lambda_role_arn
+  iam_lambda_role_name = data.terraform_remote_state.iam.outputs.lambda_role_name
+
+  private_subnet_ids = [module.aws_vpc.private_subnet_id]
+  security_group_ids = [module.injector_sg.sg_id]
+
+  source_file_path = var.injector_lambda_file_path
+  output_zip_path  = var.injector_lambda_output_zip
+  handler          = var.injector_lambda_handler
+
+  lambda_s3_write_policy_arn = null
+  attach_s3_policy           = false
+
+  layers = [
+    "arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python313:4",
+    aws_lambda_layer_version.injector_deps.arn
+  ]
+
+  environment_variables = {
+    DB_USER     = var.db_user
+    DB_PASSWORD = var.db_password
+    DB_HOST     = module.visualization_module.db_host
+    DB_NAME     = var.db_name
+  }
+}
+
+resource "aws_lambda_permission" "allow_s3_to_invoke_injector" {
+  statement_id  = "AllowExecutionFromS3BucketHN"
+  action        = "lambda:InvokeFunction"
+  function_name = module.injector_lambda.lambda_function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.s3_gold_layer.bucket_arn
+}
+
+
+resource "aws_s3_bucket_notification" "gold_bucket_notification" {
+  bucket = module.s3_gold_layer.bucket_id
+
+  lambda_function {
+    lambda_function_arn = module.injector_lambda.lambda_arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".parquet"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_to_invoke_injector]
+}
+
+
+resource "aws_lambda_function_event_invoke_config" "injector_on_failure" {
+  function_name          = module.injector_lambda.lambda_function_name
   maximum_retry_attempts = 0
 
   destination_config {
