@@ -234,7 +234,7 @@ variable "db_password" {
 }
 
 variable "injector_sg_name" {
-  type=string
+  type = string
 }
 
 variable "injector_lambda_name" {
@@ -257,6 +257,6 @@ variable "db_name" {
   type = string
 }
 
-variable "db_user"{
+variable "db_user" {
   type = string
 }
