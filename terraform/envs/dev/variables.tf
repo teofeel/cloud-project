@@ -82,6 +82,14 @@ variable "s3_bronze_bucket_name" {
   type = string
 }
 
+variable "s3_silver_bucket_name" {
+  type = string
+}
+
+variable "s3_gold_bucket_name" {
+  type = string
+}
+
 variable "hacker_news_lambda_name" {
   type = string
 }
@@ -114,6 +122,69 @@ variable "twt_output_zip_path" {
   type = string
 }
 
+variable "normalize_hn_lambda_handler" {
+  type = string
+}
+
+variable "normalize_hn_lambda_name" {
+  type = string
+}
+
+variable "normalize_hn_source_file_path" {
+  type = string
+}
+
+variable "normalize_hn_output_zip_path" {
+  type = string
+}
+
+variable "normalize_x_lambda_handler" {
+  type = string
+}
+
+variable "normalize_x_lambda_name" {
+  type = string
+}
+
+variable "normalize_x_source_file_path" {
+  type = string
+}
+
+variable "normalize_x_output_zip_path" {
+  type = string
+}
+
+variable "transform_hn_lambda_name" {
+  type = string
+}
+
+variable "transform_hn_source_file_path" {
+  type = string
+}
+
+variable "transform_hn_output_zip_path" {
+  type = string
+}
+
+variable "transform_hn_lambda_handler" {
+  type = string
+}
+
+variable "transform_x_lambda_name" {
+  type = string
+}
+
+variable "transform_x_source_file_path" {
+  type = string
+}
+
+variable "transform_x_output_zip_path" {
+  type = string
+}
+
+variable "transform_x_lambda_handler" {
+  type = string
+}
 
 variable "discord_notification_lambda_name" {
   type = string
@@ -140,11 +211,52 @@ variable "discord_failure_notification_rule_name" {
 }
 
 variable "kaggle_username" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
 }
 
 variable "kaggle_key" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
+}
+
+variable "normalize_sg_name" {
+  type = string
+}
+
+variable "transform_sg_name" {
+  type = string
+}
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "injector_sg_name" {
+  type = string
+}
+
+variable "injector_lambda_name" {
+  type = string
+}
+
+variable "injector_lambda_file_path" {
+  type = string
+}
+
+variable "injector_lambda_output_zip" {
+  type = string
+}
+
+variable "injector_lambda_handler" {
+  type = string
+}
+
+variable "db_name" {
+  type = string
+}
+
+variable "db_user" {
+  type = string
 }

@@ -59,3 +59,15 @@ variable "build_dir" {
   default = ""
   description = "If set, zip this directory instead of source_file_path"
 }
+
+variable "attach_s3_policy" {
+  type        = bool
+  description = "allow access to s3"
+  default     = false
+}
+
+variable "layers" {
+  description = "layers list attached to lambda (if we are using packages like awswrangler)"
+  type        = list(string)
+  default     = []
+}
